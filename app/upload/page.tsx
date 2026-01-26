@@ -246,11 +246,12 @@ export default function UploadPage() {
     const session = await sessionRes.json()
     
     if (!session?.user?.id) throw new Error("Unauthorized")
+    const userId = session.user.id
 
     const res = await fetch("/api/tracks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...data, creatorId: session.user.id, duration: 0 }),
+      body: JSON.stringify({ ...data, creatorId: userId, duration: 0 }),
     })
 
     if (!res.ok) throw new Error("Failed to create track")

@@ -166,8 +166,8 @@ export function TrackList({ tracks, isOwner }: TrackListProps) {
               key={track.id}
               className="group relative bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 rounded-xl p-4 transition-all duration-300"
             >
-              <div className="flex items-center gap-4">
-                <div className="relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden shadow-lg group-hover:scale-105 transition-transform cursor-pointer" onClick={() => handlePlay(track)}>
+              <div className="flex flex-col md:flex-row items-center md:items-center gap-3 md:gap-4">
+                <div className="relative w-full aspect-square md:w-16 md:h-16 flex-shrink-0 rounded-lg overflow-hidden shadow-lg group-hover:scale-105 transition-transform cursor-pointer" onClick={() => handlePlay(track)}>
                   <Image
                     src={track.coverUrl ? `/api/stream/image/${track.coverUrl}` : "/default-cover.jpg"}
                     alt={track.title}
@@ -178,9 +178,9 @@ export function TrackList({ tracks, isOwner }: TrackListProps) {
                     <Play className="w-6 h-6 text-white fill-current" />
                   </div>
                 </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 w-full text-center md:text-left">
                   <h3 className="font-bold truncate mb-1 cursor-pointer hover:text-primary-500 transition-colors" onClick={() => handlePlay(track)}>{track.title}</h3>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-center md:justify-start gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <TrendingUp className="w-3 h-3" /> {track.votes?.ups || 0}
                     </span>
@@ -195,7 +195,7 @@ export function TrackList({ tracks, isOwner }: TrackListProps) {
                 {isOwner && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); handleEdit(track); }}
-                    className="p-2 text-muted-foreground hover:text-white hover:bg-white/10 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                    className="absolute top-2 right-2 md:relative md:top-0 md:right-0 p-2 text-muted-foreground hover:text-white hover:bg-white/10 rounded-full transition-colors opacity-0 group-hover:opacity-100"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>

@@ -10,9 +10,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const userId = session.user.id
     const playlists = await prisma.playlist.findMany({
       where: {
-        userId: session.user.id,
+        userId,
       },
       include: {
         _count: {
@@ -50,12 +51,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 })
     }
 
+    const userId = session.user.id
     const playlist = await prisma.playlist.create({
       data: {
         name,
         description,
         isPublic: isPublic ?? true,
-        userId: session.user.id,
+        userId,
       },
     })
 

@@ -10,9 +10,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const userId = session.user.id
     const likedTracks = await prisma.likedTrack.findMany({
       where: {
-        userId: session.user.id,
+        userId,
       },
       include: {
         track: {
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
       },
     })
 
+
     // Format to match Track interface
     const tracks = await Promise.all(likedTracks.map(async (lt: any) => {
       const track = lt.track
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
       const downs = votes.find((v: any) => v.type === "DOWN")?._count || 0
       
       const userVote = await prisma.vote.findUnique({
-        where: { trackId_userId: { trackId: track.id, userId: session.user.id as string } }
+        where: { trackId_userId: { trackId: track.id, userId } }
       })
 
       return {

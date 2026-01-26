@@ -26,10 +26,11 @@ export async function POST(request: NextRequest, { params }: RouteProps) {
 
     // If user is logged in, record in play history
     if (session?.user?.id) {
+      const userId = session.user.id
       await prisma.playHistory.create({
         data: {
           trackId: id,
-          userId: session.user.id,
+          userId,
         },
       })
     }

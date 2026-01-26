@@ -10,6 +10,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const userId = session.user.id
     const body = await request.json()
     const { username, bio, avatar } = body
 
@@ -26,7 +27,7 @@ export async function PUT(request: NextRequest) {
       const existingUser = await prisma.user.findUnique({
         where: { username },
       })
-      if (existingUser && existingUser.id !== session.user.id) {
+      if (existingUser && existingUser.id !== userId) {
         return NextResponse.json(
           { error: "Username is already taken" },
           { status: 400 }
@@ -35,7 +36,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const updatedUser = await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: userId },
       data: {
         username,
         bio,

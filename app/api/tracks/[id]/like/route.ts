@@ -18,12 +18,13 @@ export async function POST(request: NextRequest, { params }: RouteProps) {
 
     const { id: trackId } = await params
 
+    const userId = session.user.id
     // Check if user already liked
     const existingLike = await prisma.likedTrack.findUnique({
       where: {
         trackId_userId: {
           trackId,
-          userId: session.user.id,
+          userId,
         },
       },
     })
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest, { params }: RouteProps) {
         where: {
           trackId_userId: {
             trackId,
-            userId: session.user.id,
+            userId,
           },
         },
       })
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest, { params }: RouteProps) {
       await prisma.likedTrack.create({
         data: {
           trackId,
-          userId: session.user.id,
+          userId,
         },
       })
       return NextResponse.json({ liked: true })
@@ -64,11 +65,12 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
 
     const { id: trackId } = await params
 
+    const userId = session.user.id
     const like = await prisma.likedTrack.findUnique({
       where: {
         trackId_userId: {
           trackId,
-          userId: session.user.id,
+          userId,
         },
       },
     })

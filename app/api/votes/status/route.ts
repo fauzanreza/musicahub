@@ -18,11 +18,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Track ID required" }, { status: 400 })
     }
 
+    const userId = session.user.id
     const vote = await prisma.vote.findUnique({
       where: {
         trackId_userId: {
           trackId,
-          userId: session.user.id,
+          userId,
         },
       },
     })

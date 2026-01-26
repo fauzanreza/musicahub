@@ -11,6 +11,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const userId = session.user.id as string
+
     const body = await request.json()
     const { trackId, type } = body
 
@@ -23,7 +25,7 @@ export async function POST(request: NextRequest) {
       where: {
         trackId_userId: {
           trackId,
-          userId: session.user.id,
+          userId,
         },
       },
     })
@@ -32,13 +34,13 @@ export async function POST(request: NextRequest) {
       if (existingVote.type === type) {
         // Toggle off
         await prisma.vote.delete({
-          where: { trackId_userId: { trackId, userId: session.user.id } },
+          where: { trackId_userId: { trackId, userId } },
         })
         return NextResponse.json({ vote: null })
       } else {
         // Switch vote type
         const updatedVote = await prisma.vote.update({
-          where: { trackId_userId: { trackId, userId: session.user.id } },
+          where: { trackId_userId: { trackId, userId } },
           data: { type },
         })
         return NextResponse.json({ vote: updatedVote })
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
     } else {
       // New vote
       const newVote = await prisma.vote.create({
-        data: { trackId, userId: session.user.id, type },
+        data: { trackId, userId, type },
       })
       return NextResponse.json({ vote: newVote })
     }

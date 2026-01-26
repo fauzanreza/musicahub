@@ -134,11 +134,11 @@ export function TrackCard({ track, onVote, onLike, userVote, isLiked }: TrackCar
             <MessageCircle className="h-4 w-4" />
             <span className="text-xs">{track._count?.comments || 0}</span>
           </div>
-        </div>
-        
-        {/* Play Count - Separate row on mobile if needed, or just smaller */}
-        <div className="flex items-center gap-1 text-muted-foreground">
-          <span className="text-[10px] md:text-xs">{track.playCount.toLocaleString()} plays</span>
+          
+          {/* Play Count */}
+          <div className="flex items-center gap-1 text-muted-foreground ml-auto md:ml-0">
+            <span className="text-[10px] md:text-xs">{track.playCount.toLocaleString()} plays</span>
+          </div>
         </div>
       </div>
       </div>

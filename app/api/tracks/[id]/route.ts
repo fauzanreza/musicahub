@@ -77,7 +77,8 @@ export async function PUT(request: NextRequest, { params }: RouteProps) {
       return NextResponse.json({ error: "Track not found" }, { status: 404 })
     }
 
-    if (track.creatorId !== session.user.id) {
+    const userId = session.user.id
+    if (track.creatorId !== userId) {
       return NextResponse.json(
         { error: "You do not have permission to edit this track" },
         { status: 403 }
@@ -121,7 +122,8 @@ export async function DELETE(request: NextRequest, { params }: RouteProps) {
       return NextResponse.json({ error: "Track not found" }, { status: 404 })
     }
 
-    if (track.creatorId !== session.user.id) {
+    const userId = session.user.id
+    if (track.creatorId !== userId) {
       return NextResponse.json(
         { error: "You do not have permission to delete this track" },
         { status: 403 }

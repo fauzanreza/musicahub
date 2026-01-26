@@ -54,10 +54,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 })
     }
 
+    const userId = session.user.id
+
     const comment = await prisma.comment.create({
       data: {
         trackId,
-        userId: session.user.id,
+        userId,
         content: content.trim(),
       },
       include: {
