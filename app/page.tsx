@@ -1,65 +1,165 @@
-import Image from "next/image";
+// app/page.tsx
 
-export default function Home() {
+"use client"
+
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { TrackCard } from "@/components/tracks/track-card"
+import { Sparkles, TrendingUp, Clock } from "lucide-react"
+
+interface Track {
+  id: string
+  title: string
+  audioUrl: string
+  coverUrl: string | null
+  genre: string
+  playCount: number
+  creator: {
+    id: string
+    username: string
+    avatar: string | null
+  }
+  votes: {
+    ups: number
+    downs: number
+  }
+  _count: {
+    comments: number
+  }
+}
+
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+
+export default function HomePage() {
+  const queryClient = useQueryClient()
+  const { data: session } = useSession()
+  const router = useRouter()
+
+  // Fetch trending tracks
+  const { data: trendingTracks } = useQuery<Track[]>({
+    queryKey: ["tracks", "trending"],
+    queryFn: async () => {
+      const res = await fetch("/api/tracks?sort=trending&limit=8")
+      if (!res.ok) throw new Error("Failed to fetch tracks")
+      return res.json()
+    },
+  })
+
+  // Fetch recent tracks
+  const { data: recentTracks } = useQuery<Track[]>({
+    queryKey: ["tracks", "recent"],
+    queryFn: async () => {
+      const res = await fetch("/api/tracks?sort=recent&limit=8")
+      if (!res.ok) throw new Error("Failed to fetch tracks")
+      return res.json()
+    },
+  })
+
+  // Vote mutation
+  const voteMutation = useMutation({
+    mutationFn: async ({
+      trackId,
+      type,
+    }: {
+      trackId: string
+      type: "UP" | "DOWN"
+    }) => {
+      const res = await fetch("/api/votes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackId, type }),
+      })
+      if (!res.ok) throw new Error("Failed to vote")
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tracks"] })
+    },
+  })
+
+  const handleVote = (trackId: string, type: "UP" | "DOWN") => {
+    if (!session) {
+      router.push("/login")
+      return
+    }
+    voteMutation.mutate({ trackId, type })
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen bg-background pt-8 pb-20">
+      <div className="container px-4 mx-auto space-y-12">
+        {/* Header / Welcome */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {session ? `Welcome back, ${session.user?.name?.split(' ')[0]}` : 'Discover Music'}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Listen to the latest hits and community favorites.
+            </p>
+          </div>
+          {!session && (
+             <button 
+               onClick={() => router.push("/login")}
+               className="hidden md:inline-flex items-center justify-center rounded-full bg-primary-600 px-6 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-primary-700"
+             >
+               Sign In to Upload
+             </button>
+          )}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+
+        {/* Trending Section */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary-500" />
+              <h2 className="text-xl font-bold tracking-tight">Trending Now</h2>
+            </div>
+            <button className="text-sm font-medium text-primary-500 hover:text-primary-600 transition-colors">
+              View All
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {trendingTracks?.map((track) => (
+              <TrackCard
+                key={track.id}
+                track={track}
+                onVote={handleVote}
+              />
+            ))}
+            {!trendingTracks && Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="aspect-[3/4] rounded-xl bg-muted/50 animate-pulse" />
+            ))}
+          </div>
+        </section>
+
+        {/* New Releases Section */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-xl font-bold tracking-tight">Fresh Drops</h2>
+            </div>
+            <button className="text-sm font-medium text-primary-500 hover:text-primary-600 transition-colors">
+              View All
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {recentTracks?.map((track) => (
+              <TrackCard
+                key={track.id}
+                track={track}
+                onVote={handleVote}
+              />
+            ))}
+             {!recentTracks && Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="aspect-[3/4] rounded-xl bg-muted/50 animate-pulse" />
+            ))}
+          </div>
+        </section>
+      </div>
     </div>
-  );
+  )
 }
