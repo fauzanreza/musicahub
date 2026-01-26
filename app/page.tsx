@@ -5,6 +5,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { TrackCard } from "@/components/tracks/track-card"
 import { Sparkles, TrendingUp, Clock } from "lucide-react"
+import Link from "next/link"
 
 interface Track {
   id: string
@@ -25,6 +26,8 @@ interface Track {
   _count: {
     comments: number
   }
+  isLiked: boolean
+  userVote: "UP" | "DOWN" | null
 }
 
 import { useSession } from "next-auth/react"
@@ -77,12 +80,34 @@ export default function HomePage() {
     },
   })
 
+  // Like mutation
+  const likeMutation = useMutation({
+    mutationFn: async (trackId: string) => {
+      const res = await fetch(`/api/tracks/${trackId}/like`, {
+        method: "POST",
+      })
+      if (!res.ok) throw new Error("Failed to like")
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tracks"] })
+    },
+  })
+
   const handleVote = (trackId: string, type: "UP" | "DOWN") => {
     if (!session) {
       router.push("/login")
       return
     }
     voteMutation.mutate({ trackId, type })
+  }
+
+  const handleLike = (trackId: string) => {
+    if (!session) {
+      router.push("/login")
+      return
+    }
+    likeMutation.mutate(trackId)
   }
 
   return (
@@ -115,9 +140,12 @@ export default function HomePage() {
               <TrendingUp className="h-5 w-5 text-primary-500" />
               <h2 className="text-xl font-bold tracking-tight">Trending Now</h2>
             </div>
-            <button className="text-sm font-medium text-primary-500 hover:text-primary-600 transition-colors">
+            <Link 
+              href="/explore"
+              className="text-sm font-medium text-primary-500 hover:text-primary-600 transition-colors"
+            >
               View All
-            </button>
+            </Link>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -126,6 +154,9 @@ export default function HomePage() {
                 key={track.id}
                 track={track}
                 onVote={handleVote}
+                onLike={handleLike}
+                isLiked={track.isLiked}
+                userVote={track.userVote}
               />
             ))}
             {!trendingTracks && Array.from({ length: 5 }).map((_, i) => (
@@ -141,9 +172,12 @@ export default function HomePage() {
               <Clock className="h-5 w-5 text-indigo-500" />
               <h2 className="text-xl font-bold tracking-tight">Fresh Drops</h2>
             </div>
-            <button className="text-sm font-medium text-primary-500 hover:text-primary-600 transition-colors">
+            <Link 
+              href="/explore"
+              className="text-sm font-medium text-primary-500 hover:text-primary-600 transition-colors"
+            >
               View All
-            </button>
+            </Link>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -152,6 +186,9 @@ export default function HomePage() {
                 key={track.id}
                 track={track}
                 onVote={handleVote}
+                onLike={handleLike}
+                isLiked={track.isLiked}
+                userVote={track.userVote}
               />
             ))}
              {!recentTracks && Array.from({ length: 5 }).map((_, i) => (

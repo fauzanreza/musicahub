@@ -4,7 +4,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { Music, Heart, Edit2, Trash2, X, Loader2, Camera, Play } from "lucide-react"
+import { Music, Heart, Edit2, Trash2, X, Loader2, Camera, Play, TrendingUp, TrendingDown } from "lucide-react"
 import { toast } from "sonner"
 import { usePlayerStore } from "@/lib/store/player-store"
 
@@ -15,6 +15,10 @@ interface Track {
   coverUrl: string | null
   audioUrl: string
   createdAt: Date
+  votes?: {
+    ups: number
+    downs: number
+  }
   _count: {
     votes: number
   }
@@ -156,7 +160,7 @@ export function TrackList({ tracks, isOwner }: TrackListProps) {
       </h2>
 
       {tracks.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {tracks.map((track) => (
             <div 
               key={track.id}
@@ -178,7 +182,10 @@ export function TrackList({ tracks, isOwner }: TrackListProps) {
                   <h3 className="font-bold truncate mb-1 cursor-pointer hover:text-primary-500 transition-colors" onClick={() => handlePlay(track)}>{track.title}</h3>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      <Heart className="w-3 h-3" /> {track._count.votes}
+                      <TrendingUp className="w-3 h-3" /> {track.votes?.ups || 0}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <TrendingDown className="w-3 h-3" /> {track.votes?.downs || 0}
                     </span>
                     <span className="bg-white/10 px-2 py-0.5 rounded-full text-[10px]">
                       {track.genre}

@@ -38,21 +38,6 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
   const user = await prisma.user.findUnique({
     where: { id },
     include: {
-      tracks: {
-        orderBy: { createdAt: 'desc' },
-        include: {
-          _count: {
-            select: { votes: { where: { type: 'UP' } } }
-          },
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              avatar: true
-            }
-          }
-        }
-      },
       _count: {
         select: {
           tracks: true,
@@ -64,6 +49,37 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
   if (!user) {
     notFound()
   }
+
+  const tracks = await prisma.track.findMany({
+    where: { creatorId: id },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      creator: {
+        select: {
+          id: true,
+          username: true,
+          avatar: true
+        }
+      },
+      _count: {
+        select: { comments: true }
+      }
+    }
+  })
+
+  const tracksWithVotes = await Promise.all(tracks.map(async (track) => {
+    const votes = await prisma.vote.groupBy({
+      by: ["type"],
+      where: { trackId: track.id },
+      _count: true,
+    })
+    const ups = votes.find((v: any) => v.type === "UP")?._count || 0
+    const downs = votes.find((v: any) => v.type === "DOWN")?._count || 0
+    return {
+      ...track,
+      votes: { ups, downs }
+    }
+  }))
 
   // Calculate total likes received
   const totalLikes = await prisma.vote.count({
@@ -98,7 +114,7 @@ export default async function UserProfilePage({ params }: UserProfilePageProps) 
       />
 
       <TrackList 
-        tracks={user.tracks} 
+        tracks={tracksWithVotes as any} 
         isOwner={isOwner} 
       />
     </div>

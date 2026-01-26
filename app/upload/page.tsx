@@ -199,6 +199,7 @@ export default function UploadPage() {
       }
 
       // 2. Upload Each Track
+      let hasError = false
       for (let i = 0; i < massFiles.length; i++) {
         const fileItem = massFiles[i]
         if (fileItem.status === "success") continue // Skip already uploaded
@@ -220,12 +221,12 @@ export default function UploadPage() {
           setMassFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: "success", progress: 100 } : f))
         } catch (error) {
           console.error(error)
+          hasError = true
           setMassFiles(prev => prev.map((f, idx) => idx === i ? { ...f, status: "error" } : f))
         }
       }
       
-      const allSuccess = massFiles.every(f => f.status === "success")
-      if (allSuccess) {
+      if (!hasError) {
         toast.success("All tracks uploaded successfully!")
         router.push("/")
       } else {

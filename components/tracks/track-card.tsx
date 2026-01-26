@@ -19,10 +19,12 @@ interface TrackCardProps {
     }
   }
   onVote?: (trackId: string, type: "UP" | "DOWN") => void
+  onLike?: (trackId: string) => void
   userVote?: "UP" | "DOWN" | null
+  isLiked?: boolean
 }
 
-export function TrackCard({ track, onVote, userVote }: TrackCardProps) {
+export function TrackCard({ track, onVote, onLike, userVote, isLiked }: TrackCardProps) {
   const { setCurrentTrack, setQueue, play, currentTrack } = usePlayerStore()
   const [isHovered, setIsHovered] = useState(false)
 
@@ -38,13 +40,13 @@ export function TrackCard({ track, onVote, userVote }: TrackCardProps) {
 
   return (
     <div
-      className="group relative rounded-lg bg-card p-4 transition-all hover:bg-accent cursor-pointer"
+      className="group relative rounded-lg bg-card p-3 md:p-4 transition-all hover:bg-accent cursor-pointer"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={handlePlay}
     >
       {/* Cover Image */}
-      <div className="relative aspect-square mb-3 overflow-hidden rounded-md bg-muted">
+      <div className="relative aspect-square mb-2 md:mb-3 overflow-hidden rounded-md bg-muted">
         <Image
           src={track.coverUrl ? `/api/stream/image/${track.coverUrl}` : "/default-cover.jpg"}
           alt={track.title}
@@ -66,7 +68,7 @@ export function TrackCard({ track, onVote, userVote }: TrackCardProps) {
       </div>
 
       {/* Track Info */}
-      <div className="space-y-1 mb-3">
+      <div className="space-y-0.5 md:space-y-1 mb-2 md:mb-3">
         <h3 className="font-semibold truncate">{track.title}</h3>
         <p className="text-sm text-muted-foreground truncate">
           {track.creator.username}
@@ -75,60 +77,70 @@ export function TrackCard({ track, onVote, userVote }: TrackCardProps) {
       </div>
 
       {/* Stats & Actions */}
-      <div className="flex items-center justify-between text-sm">
-        <div className="flex items-center gap-3">
-          {/* Vote Score */}
+      <div className="flex flex-col gap-2 text-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 md:gap-3">
+          {/* Love (Heart) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onLike?.(track.id)
+            }}
+            className={`transition-all ${
+              isLiked ? "text-red-500" : "text-muted-foreground hover:text-red-500"
+            }`}
+          >
+            <Heart className={`h-4 w-4 ${isLiked ? "fill-current" : ""}`} />
+          </button>
+
+          {/* UP Votes */}
           <div className="flex items-center gap-1">
             <button
               onClick={(e) => {
                 e.stopPropagation()
                 onVote?.(track.id, "UP")
               }}
-              className={`p-1 rounded transition-colors ${
-                userVote === "UP"
-                  ? "text-primary-500"
-                  : "text-muted-foreground hover:text-primary-500"
+              className={`transition-colors ${
+                userVote === "UP" ? "text-primary-500" : "text-muted-foreground hover:text-primary-500"
               }`}
             >
-              <TrendingUp className="h-4 w-4" />
+              <TrendingUp className={`h-4 w-4 ${userVote === "UP" ? "fill-current" : ""}`} />
             </button>
-            <span className={voteScore > 0 ? "text-primary-500" : ""}>
-              {voteScore}
+            <span className={`text-xs font-medium ${userVote === "UP" ? "text-primary-500" : "text-muted-foreground"}`}>
+              {track.votes?.ups || 0}
             </span>
+          </div>
+
+          {/* DOWN Votes */}
+          <div className="flex items-center gap-1">
             <button
               onClick={(e) => {
                 e.stopPropagation()
                 onVote?.(track.id, "DOWN")
               }}
-              className={`p-1 rounded transition-colors ${
-                userVote === "DOWN"
-                  ? "text-red-500"
-                  : "text-muted-foreground hover:text-red-500"
+              className={`transition-colors ${
+                userVote === "DOWN" ? "text-red-500" : "text-muted-foreground hover:text-red-500"
               }`}
             >
-              <TrendingDown className="h-4 w-4" />
+              <TrendingDown className={`h-4 w-4 ${userVote === "DOWN" ? "fill-current" : ""}`} />
             </button>
+            <span className={`text-xs font-medium ${userVote === "DOWN" ? "text-red-500" : "text-muted-foreground"}`}>
+              {track.votes?.downs || 0}
+            </span>
           </div>
 
           {/* Comments */}
           <div className="flex items-center gap-1 text-muted-foreground">
             <MessageCircle className="h-4 w-4" />
-            <span>{track._count?.comments || 0}</span>
+            <span className="text-xs">{track._count?.comments || 0}</span>
           </div>
         </div>
-
-        {/* Like Button */}
-        <button
-          onClick={(e) => e.stopPropagation()}
-          className="p-1 rounded-full hover:bg-background transition-colors"
-        >
-          <Heart className="h-4 w-4 text-muted-foreground hover:text-red-500" />
-        </button>
+        
+        {/* Play Count - Separate row on mobile if needed, or just smaller */}
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <span className="text-[10px] md:text-xs">{track.playCount.toLocaleString()} plays</span>
+        </div>
       </div>
-
-      {/* Play Count Badge */}
-      <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white">
-        {track.playCount.toLocaleString()} plays
       </div>
     </div>
   )

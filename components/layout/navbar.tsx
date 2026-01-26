@@ -4,7 +4,7 @@
 
 import Link from "next/link"
 import { useTheme } from "next-themes"
-import { Moon, Sun, Music, Search, Home, Upload, User, Menu, X } from "lucide-react"
+import { Moon, Sun, Music, Search, Home, Upload, User, Menu, X, Library } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
 
@@ -45,7 +45,10 @@ export function Navbar() {
           <NavLink href="/" icon={<Home className="h-4 w-4" />} label="Home" />
           <NavLink href="/explore" icon={<Search className="h-4 w-4" />} label="Explore" />
           {session && (
-            <NavLink href="/upload" icon={<Upload className="h-4 w-4" />} label="Upload" />
+            <>
+              <NavLink href="/library" icon={<Library className="h-4 w-4" />} label="Library" />
+              <NavLink href="/upload" icon={<Upload className="h-4 w-4" />} label="Upload" />
+            </>
           )}
         </div>
 
@@ -103,7 +106,10 @@ export function Navbar() {
             <MobileNavLink href="/" icon={<Home className="h-4 w-4" />} label="Home" onClick={() => setIsMobileMenuOpen(false)} />
             <MobileNavLink href="/explore" icon={<Search className="h-4 w-4" />} label="Explore" onClick={() => setIsMobileMenuOpen(false)} />
             {session && (
-              <MobileNavLink href="/upload" icon={<Upload className="h-4 w-4" />} label="Upload" onClick={() => setIsMobileMenuOpen(false)} />
+              <>
+                <MobileNavLink href="/library" icon={<Library className="h-4 w-4" />} label="Library" onClick={() => setIsMobileMenuOpen(false)} />
+                <MobileNavLink href="/upload" icon={<Upload className="h-4 w-4" />} label="Upload" onClick={() => setIsMobileMenuOpen(false)} />
+              </>
             )}
           </div>
           

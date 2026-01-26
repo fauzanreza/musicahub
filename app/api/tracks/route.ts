@@ -1,6 +1,7 @@
 // app/api/tracks/route.ts
 
 import { prisma } from "@/lib/prisma"
+import { auth } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
@@ -28,8 +29,8 @@ export async function GET(request: NextRequest) {
     if (sort === "popular") {
       orderBy = { playCount: "desc" }
     } else if (sort === "trending") {
-      // For trending, we'll order by recent plays with high vote counts
-      orderBy = [{ playCount: "desc" }, { createdAt: "desc" }]
+      // We'll sort in memory below for trending
+      orderBy = { createdAt: "desc" }
     }
 
     const tracks = await prisma.track.findMany({
@@ -54,8 +55,10 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // Calculate vote scores
-    const tracksWithVotes = await Promise.all(
+    const session = await auth()
+    const userId = session?.user?.id
+
+    let tracksWithVotes = await Promise.all(
       tracks.map(async (track: any) => {
         const votes = await prisma.vote.groupBy({
           by: ["type"],
@@ -66,12 +69,31 @@ export async function GET(request: NextRequest) {
         const ups = votes.find((v: any) => v.type === "UP")?._count || 0
         const downs = votes.find((v: any) => v.type === "DOWN")?._count || 0
 
+        const isLiked = userId ? await prisma.likedTrack.findUnique({
+          where: { trackId_userId: { trackId: track.id, userId } }
+        }) : null
+
+        const userVote = userId ? await prisma.vote.findUnique({
+          where: { trackId_userId: { trackId: track.id, userId } }
+        }) : null
+
         return {
           ...track,
           votes: { ups, downs },
+          isLiked: !!isLiked,
+          userVote: userVote?.type || null
         }
       })
     )
+
+    if (sort === "trending") {
+      tracksWithVotes.sort((a: any, b: any) => {
+        const scoreA = a.votes.ups - a.votes.downs
+        const scoreB = b.votes.ups - b.votes.downs
+        if (scoreB !== scoreA) return scoreB - scoreA
+        return b.playCount - a.playCount // Tie-break with play count
+      })
+    }
 
     return NextResponse.json(tracksWithVotes)
   } catch (error) {

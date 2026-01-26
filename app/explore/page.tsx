@@ -3,9 +3,10 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { TrackCard } from "@/components/tracks/track-card"
-import { Search, Music, Filter } from "lucide-react"
+import { Search, Music, Filter, ListMusic } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 interface Track {
   id: string
@@ -26,6 +27,8 @@ interface Track {
   _count: {
     comments: number
   }
+  isLiked: boolean
+  userVote: "UP" | "DOWN" | null
 }
 
 const GENRES = [
@@ -50,7 +53,7 @@ export default function ExplorePage() {
   const router = useRouter()
 
   // Fetch tracks with filters
-  const { data: tracks, isLoading } = useQuery<Track[]>({
+  const { data: tracks, isLoading: isLoadingTracks } = useQuery<Track[]>({
     queryKey: ["tracks", "explore", searchQuery, selectedGenre],
     queryFn: async () => {
       const params = new URLSearchParams()
@@ -59,6 +62,19 @@ export default function ExplorePage() {
       
       const res = await fetch(`/api/tracks?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch tracks")
+      return res.json()
+    },
+  })
+
+  // Fetch public playlists
+  const { data: publicPlaylists, isLoading: isLoadingPlaylists } = useQuery({
+    queryKey: ["playlists", "public", searchQuery],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (searchQuery) params.append("q", searchQuery)
+      
+      const res = await fetch(`/api/playlists/public?${params.toString()}`)
+      if (!res.ok) throw new Error("Failed to fetch playlists")
       return res.json()
     },
   })
@@ -82,6 +98,21 @@ export default function ExplorePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tracks"] })
+      queryClient.invalidateQueries({ queryKey: ["votes"] })
+    },
+  })
+
+  // Like mutation
+  const likeMutation = useMutation({
+    mutationFn: async (trackId: string) => {
+      const res = await fetch(`/api/tracks/${trackId}/like`, {
+        method: "POST",
+      })
+      if (!res.ok) throw new Error("Failed to like")
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tracks"] })
     },
   })
 
@@ -91,6 +122,14 @@ export default function ExplorePage() {
       return
     }
     voteMutation.mutate({ trackId, type })
+  }
+
+  const handleLike = (trackId: string) => {
+    if (!session) {
+      router.push("/login")
+      return
+    }
+    likeMutation.mutate(trackId)
   }
 
   return (
@@ -135,34 +174,84 @@ export default function ExplorePage() {
           </div>
         </div>
 
-        {/* Results Grid */}
-        {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="aspect-[3/4] rounded-xl bg-muted/50 animate-pulse" />
-            ))}
-          </div>
-        ) : tracks && tracks.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {tracks.map((track) => (
-              <TrackCard
-                key={track.id}
-                track={track}
-                onVote={handleVote}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-20">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
-              <Music className="h-8 w-8 text-muted-foreground" />
+        {/* Playlists Section (Only if searching or no genre filter) */}
+        {(selectedGenre === "All") && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-2">
+              <ListMusic className="h-5 w-5 text-primary-500" />
+              <h2 className="text-xl font-bold tracking-tight">Public Playlists</h2>
             </div>
-            <h3 className="text-lg font-medium">No tracks found</h3>
-            <p className="text-muted-foreground">
-              Try adjusting your search or filters
-            </p>
-          </div>
+            
+            {isLoadingPlaylists ? (
+              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-24 w-64 flex-shrink-0 rounded-xl bg-muted/50 animate-pulse" />
+                ))}
+              </div>
+            ) : publicPlaylists && publicPlaylists.length > 0 ? (
+              <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+                {publicPlaylists.map((playlist: any) => (
+                  <Link 
+                    key={playlist.id}
+                    href={`/playlist/${playlist.id}`}
+                    className="flex-shrink-0 w-64 flex items-center gap-4 p-4 rounded-xl bg-card border border-white/5 hover:bg-accent transition-all cursor-pointer"
+                  >
+                    <div className="h-12 w-12 rounded-lg bg-primary-500/10 flex items-center justify-center">
+                      <ListMusic className="h-6 w-6 text-primary-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold truncate text-sm">{playlist.name}</h3>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        By {playlist.user.username} • {playlist._count.tracks} tracks
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : searchQuery && (
+              <p className="text-sm text-muted-foreground">No playlists found for "{searchQuery}"</p>
+            )}
+          </section>
         )}
+
+        {/* Tracks Section */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Music className="h-5 w-5 text-primary-500" />
+            <h2 className="text-xl font-bold tracking-tight">Tracks</h2>
+          </div>
+
+          {isLoadingTracks ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="aspect-[3/4] rounded-xl bg-muted/50 animate-pulse" />
+              ))}
+            </div>
+          ) : tracks && tracks.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+              {tracks.map((track) => (
+                <TrackCard
+                  key={track.id}
+                  track={track}
+                  onVote={handleVote}
+                  onLike={handleLike}
+                  isLiked={track.isLiked}
+                  userVote={track.userVote}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
+                <Music className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <h3 className="text-lg font-medium">No tracks found</h3>
+              <p className="text-muted-foreground">
+                Try adjusting your search or filters
+              </p>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   )

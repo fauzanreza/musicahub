@@ -9,6 +9,54 @@ interface RouteProps {
   }>
 }
 
+export async function GET(request: NextRequest, { params }: RouteProps) {
+  try {
+    const { id } = await params
+
+    const track = await prisma.track.findUnique({
+      where: { id },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            username: true,
+            avatar: true,
+          },
+        },
+        votes: {
+          select: {
+            type: true,
+          },
+        },
+        _count: {
+          select: {
+            comments: true,
+          },
+        },
+      },
+    })
+
+    if (!track) {
+      return NextResponse.json({ error: "Track not found" }, { status: 404 })
+    }
+
+    // Format votes
+    const ups = await prisma.vote.count({ where: { trackId: id, type: "UP" } })
+    const downs = await prisma.vote.count({ where: { trackId: id, type: "DOWN" } })
+
+    return NextResponse.json({
+      ...track,
+      votes: { ups, downs },
+    })
+  } catch (error) {
+    console.error("Track fetch error:", error)
+    return NextResponse.json(
+      { error: "Failed to fetch track" },
+      { status: 500 }
+    )
+  }
+}
+
 export async function PUT(request: NextRequest, { params }: RouteProps) {
   try {
     const session = await auth()

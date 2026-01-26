@@ -29,38 +29,24 @@ export async function POST(request: NextRequest) {
     })
 
     if (existingVote) {
-      // If same vote type, remove it (toggle off)
       if (existingVote.type === type) {
+        // Toggle off
         await prisma.vote.delete({
-          where: {
-            trackId_userId: {
-              trackId,
-              userId: session.user.id,
-            },
-          },
+          where: { trackId_userId: { trackId, userId: session.user.id } },
         })
         return NextResponse.json({ vote: null })
       } else {
-        // If different vote type, update it
+        // Switch vote type
         const updatedVote = await prisma.vote.update({
-          where: {
-            trackId_userId: {
-              trackId,
-              userId: session.user.id,
-            },
-          },
+          where: { trackId_userId: { trackId, userId: session.user.id } },
           data: { type },
         })
         return NextResponse.json({ vote: updatedVote })
       }
     } else {
-      // Create new vote
+      // New vote
       const newVote = await prisma.vote.create({
-        data: {
-          trackId,
-          userId: session.user.id,
-          type,
-        },
+        data: { trackId, userId: session.user.id, type },
       })
       return NextResponse.json({ vote: newVote })
     }
