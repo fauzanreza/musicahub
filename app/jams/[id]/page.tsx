@@ -117,11 +117,19 @@ export default function JamPage() {
       })
     }
 
-    return () => {
-      // We don't need to off() here if we want the Player component to handle it globally,
-      // but if we had listeners here, we would.
+    const handleUserJoined = () => {
+      queryClient.invalidateQueries({ queryKey: ["jam", id] })
+      toast.info("A new listener joined!", {
+        icon: <Users className="h-4 w-4" />
+      })
     }
-  }, [socket, jam, session?.user?.id, activeJamId])
+
+    socket.on("user-joined", handleUserJoined)
+
+    return () => {
+      socket.off("user-joined", handleUserJoined)
+    }
+  }, [socket, jam?.id, session?.user?.id, activeJamId, queryClient, id])
 
 
 

@@ -237,6 +237,11 @@ export function Player() {
 
     // Join jam room globally
     socket.emit("join-jam", activeJamId)
+    
+    // Request initial sync if listener
+    if (!isJamHost) {
+      socket.emit("request-sync", activeJamId)
+    }
 
     // Playback sync for listeners
     const handlePlaybackState = (state: any) => {
@@ -271,19 +276,36 @@ export function Player() {
   }, [socket, activeJamId, session?.user?.id, isJamHost, isPlaying, currentTrack?.id, play, pause, seek])
 
   // Helper to broadcast playback state immediately
+  // We use getState() to ensure we have the absolute latest values without triggering re-renders
   const broadcastPlayback = (overrideState?: any) => {
-    if (!isJamHost || !socket || !activeJamId || !currentTrack) return
+    const state = usePlayerStore.getState()
+    if (!state.isHost || !socket || !state.activeJamId || !state.currentTrack) return
 
     socket.emit("sync-playback", {
-      jamId: activeJamId,
+      jamId: state.activeJamId,
       state: {
-        track: overrideState?.track || currentTrack,
-        isPlaying: overrideState?.isPlaying !== undefined ? overrideState.isPlaying : isPlaying,
-        seekPosition: overrideState?.seekPosition !== undefined ? overrideState.seekPosition : currentTime,
+        track: overrideState?.track || state.currentTrack,
+        isPlaying: overrideState?.isPlaying !== undefined ? overrideState.isPlaying : state.isPlaying,
+        seekPosition: overrideState?.seekPosition !== undefined ? overrideState.seekPosition : state.currentTime,
         timestamp: Date.now(),
       },
     })
   }
+
+  // Host: Listen for sync requests
+  useEffect(() => {
+    if (!isJamHost || !socket || !activeJamId) return
+
+    const handleRequestSync = () => {
+      broadcastPlayback()
+    }
+
+    socket.on("request-sync", handleRequestSync)
+
+    return () => {
+      socket.off("request-sync", handleRequestSync)
+    }
+  }, [isJamHost, socket, activeJamId])
 
   // Host: Broadcast playback state globally
   useEffect(() => {

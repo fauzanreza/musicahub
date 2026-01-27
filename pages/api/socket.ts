@@ -25,6 +25,8 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIO) => {
       socket.on("join-jam", (jamId) => {
         socket.join(jamId);
         console.log(`Socket ${socket.id} joined jam ${jamId}`);
+        // Broadcast to others that a user joined
+        socket.to(jamId).emit("user-joined", { userId: socket.id });
       });
 
       socket.on("leave-jam", (jamId) => {
@@ -38,6 +40,11 @@ const ioHandler = (req: NextApiRequest, res: NextApiResponseServerIO) => {
 
       socket.on("send-reaction", ({ jamId, reaction, userId }) => {
         io.to(jamId).emit("new-reaction", { reaction, userId });
+      });
+
+      socket.on("request-sync", (jamId) => {
+        // Broadcast to host (or everyone, host will pick it up) to send sync data
+        socket.to(jamId).emit("request-sync", { requesterId: socket.id });
       });
 
       socket.on("sync-playback", ({ jamId, state }) => {
