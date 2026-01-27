@@ -154,7 +154,7 @@ export default function HomePage() {
                 LISTENING PARTY
               </div>
               <div className="space-y-2">
-                <h2 className="text-4xl md:text-5xl font-black tracking-tight text-white">
+                <h2 className="text-4xl md:text-5xl font-black tracking-tight text-white font-display">
                   Vibe Together, <span className="text-primary-200">Live.</span>
                 </h2>
                 <p className="text-primary-100/80 max-w-md text-lg font-medium leading-relaxed">

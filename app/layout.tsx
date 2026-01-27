@@ -1,7 +1,7 @@
 // app/layout.tsx
 
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import localFont from "next/font/local"
 import "./globals.css"
 import { ThemeProvider } from "@/components/providers/theme-provider"
 import { QueryProvider } from "@/components/providers/query-provider"
@@ -10,7 +10,15 @@ import { Navbar } from "@/components/layout/navbar"
 import { Player } from "@/components/player/player"
 import { Toaster } from "sonner"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = localFont({
+  src: "./fonts/Inter/Inter-VariableFont_opsz,wght.ttf",
+  variable: "--font-inter",
+})
+
+const girassol = localFont({
+  src: "./fonts/Girassol/Girassol-Regular.ttf",
+  variable: "--font-girassol",
+})
 
 export const metadata: Metadata = {
   title: "MusicaHub - Democratic Music Streaming",
@@ -24,7 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+      <body className={`${inter.variable} ${girassol.variable} font-sans`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="dark"
