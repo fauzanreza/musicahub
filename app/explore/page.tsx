@@ -133,7 +133,7 @@ export default function ExplorePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pt-8 pb-20">
+    <div className="min-h-screen bg-background pt-8 pb-32">
       <div className="container px-4 mx-auto space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

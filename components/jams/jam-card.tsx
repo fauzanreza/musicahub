@@ -25,20 +25,14 @@ export function JamCard({ jam }: JamCardProps) {
   return (
     <Link
       href={`/jams/${jam.id}`}
-      className="group relative flex flex-col gap-3 rounded-2xl bg-white/5 p-4 border border-white/10 hover:bg-white/10 transition-all hover:scale-[1.02] active:scale-[0.98]"
+      className="group relative flex flex-col gap-3 rounded-2xl bg-card/50 backdrop-blur-md p-4 border border-border hover:bg-accent transition-all hover:scale-[1.02] active:scale-[0.98]"
     >
       <div className="relative aspect-square overflow-hidden rounded-xl bg-muted">
-        {jam.currentTrack?.coverUrl ? (
-          <img
-            src={`/api/stream/image/${jam.currentTrack.coverUrl}`}
-            alt={jam.currentTrack.title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary-500/20 to-primary-900/20">
-            <Music className="h-12 w-12 text-primary-500/40" />
-          </div>
-        )}
+        <img
+          src={jam.currentTrack?.coverUrl ? `/api/stream/image/${jam.currentTrack.coverUrl}` : "/default-cover.jpg"}
+          alt={jam.currentTrack?.title || "Jam"}
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+        />
         
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
           <div className="h-12 w-12 rounded-full bg-primary-500 flex items-center justify-center shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-transform">

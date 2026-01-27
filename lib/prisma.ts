@@ -4,7 +4,6 @@ import mariadb from 'mariadb'
 
 const adapter = new PrismaMariaDb(process.env.DATABASE_URL!)
 
-
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
 }

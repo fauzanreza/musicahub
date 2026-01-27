@@ -40,15 +40,40 @@ export async function saveFile(
 }
 
 export function validateAudioFile(file: File): boolean {
-  const allowedTypes = ["audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg"]
-  const maxSize = 50 * 1024 * 1024 // 50MB
+  // Support for various audio formats
+  const allowedTypes = [
+    "audio/mpeg",           // MP3
+    "audio/mp3",            // MP3 (alternative)
+    "audio/wav",            // WAV
+    "audio/wave",           // WAV (alternative)
+    "audio/x-wav",          // WAV (alternative)
+    "audio/ogg",            // OGG
+    "audio/flac",           // FLAC
+    "audio/x-flac",         // FLAC (alternative)
+    "audio/mp4",            // M4A
+    "audio/x-m4a",          // M4A (alternative)
+    "audio/aac",            // AAC
+    "audio/aacp",           // AAC+ (alternative)
+    "audio/opus",           // OPUS
+    "audio/webm",           // WEBM
+  ]
+  
+  // Also check file extension as fallback (some browsers don't set MIME type correctly)
+  const allowedExtensions = [
+    ".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac", ".opus", ".webm"
+  ]
+  
+  const maxSize = 100 * 1024 * 1024 // 100MB (increased for FLAC files which are larger)
 
-  if (!allowedTypes.includes(file.type)) {
-    throw new Error("Invalid file type. Only MP3, WAV, and OGG are allowed.")
+  const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'))
+  const isValidType = allowedTypes.includes(file.type) || allowedExtensions.includes(fileExtension)
+
+  if (!isValidType) {
+    throw new Error("Invalid file type. Supported formats: MP3, WAV, OGG, FLAC, M4A, AAC, OPUS, WEBM")
   }
 
   if (file.size > maxSize) {
-    throw new Error("File too large. Maximum size is 50MB.")
+    throw new Error("File too large. Maximum size is 100MB.")
   }
 
   return true

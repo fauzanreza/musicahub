@@ -26,12 +26,24 @@ interface TrackCardProps {
 }
 
 export function TrackCard({ track, onVote, onLike, userVote, isLiked }: TrackCardProps) {
-  const { setCurrentTrack, setQueue, play, currentTrack, activeJamId, isHost } = usePlayerStore()
+  const { setCurrentTrack, setQueue, play, currentTrack, activeJamId, isHost, leaveJam } = usePlayerStore()
   const [isHovered, setIsHovered] = useState(false)
 
   const isCurrentTrack = currentTrack?.id === track.id
 
-  const handlePlay = () => {
+  const handlePlay = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    
+    if (activeJamId && !isHost) {
+      toast.error("You are in a Listening Party. Leave the party to play other songs.", {
+        action: {
+          label: "Leave Jam",
+          onClick: () => leaveJam()
+        }
+      })
+      return
+    }
+
     setCurrentTrack(track)
     setQueue([track])
     play()
@@ -55,14 +67,12 @@ export function TrackCard({ track, onVote, onLike, userVote, isLiked }: TrackCar
     }
   }
 
-  const voteScore = (track.votes?.ups || 0) - (track.votes?.downs || 0)
-
   return (
     <div
-      className="group relative rounded-lg bg-card p-3 md:p-4 transition-all hover:bg-accent cursor-pointer"
+      className="group relative rounded-lg bg-card p-3 md:p-4 transition-all hover:bg-accent cursor-pointer border border-border"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={handlePlay}
+      onClick={() => handlePlay()}
     >
       {/* Cover Image */}
       <div className="relative aspect-square mb-2 md:mb-3 overflow-hidden rounded-md bg-muted">
@@ -77,7 +87,7 @@ export function TrackCard({ track, onVote, onLike, userVote, isLiked }: TrackCar
         {(isHovered || isCurrentTrack) && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2">
             <button
-              onClick={handlePlay}
+              onClick={(e) => handlePlay(e)}
               className="bg-primary-500 hover:bg-primary-600 rounded-full p-4 transition-transform hover:scale-110"
             >
               <Play className="h-6 w-6 text-white fill-white" />

@@ -35,6 +35,8 @@ interface PlayerState {
   activeJamId: string | null
   isHost: boolean
   isPlayerVisible: boolean
+  jamMessages: any[]
+  reactions: any[]
 
   // Actions
   setCurrentTrack: (track: Track) => void
@@ -56,6 +58,11 @@ interface PlayerState {
   setActiveJam: (jamId: string | null, isHost: boolean) => void
   setIsPlayerVisible: (isVisible: boolean) => void
   clearQueue: () => void
+  leaveJam: () => void
+  addJamMessage: (message: any) => void
+  setJamMessages: (messages: any[]) => void
+  addReaction: (reaction: any) => void
+  clearJamData: () => void
 }
 
 export const usePlayerStore = create<PlayerState>()(
@@ -75,13 +82,22 @@ export const usePlayerStore = create<PlayerState>()(
       activeJamId: null,
       isHost: false,
       isPlayerVisible: false,
+      jamMessages: [],
+      reactions: [],
 
       setCurrentTrack: (track) => {
-        const { howl } = get()
+        const { howl, activeJamId, isHost } = get()
+        
+        // If in a Jam and not the host, don't allow manual track changes
+        // The user must leave the jam first
+        if (activeJamId && !isHost) {
+          return
+        }
+
         if (howl) {
           howl.unload()
         }
-        set({ currentTrack: track, isPlaying: true, currentTime: 0, isExpanded: true, isLoading: true, isPlayerVisible: true })
+        set({ howl: null, currentTrack: track, isPlaying: true, currentTime: 0, isExpanded: true, isLoading: true, isPlayerVisible: true })
       },
 
       setQueue: (tracks) => set({ queue: tracks }),
@@ -124,7 +140,8 @@ export const usePlayerStore = create<PlayerState>()(
           setCurrentTrack(queue[randomIndex])
         } else if (currentIndex < queue.length - 1) {
           setCurrentTrack(queue[currentIndex + 1])
-        } else if (repeat === 'all') {
+        } else {
+          // Circular: wrap around to the first track
           setCurrentTrack(queue[0])
         }
       },
@@ -143,6 +160,9 @@ export const usePlayerStore = create<PlayerState>()(
         const currentIndex = queue.findIndex((t) => t.id === currentTrack.id)
         if (currentIndex > 0) {
           setCurrentTrack(queue[currentIndex - 1])
+        } else {
+          // Circular: wrap around to the last track
+          setCurrentTrack(queue[queue.length - 1])
         }
       },
 
@@ -178,7 +198,32 @@ export const usePlayerStore = create<PlayerState>()(
 
       setHowl: (howl) => set({ howl }),
 
-      setActiveJam: (jamId, isHost) => set({ activeJamId: jamId, isHost }),
+      setActiveJam: (jamId, isHost) => {
+        const currentJamId = get().activeJamId
+        if (currentJamId !== jamId) {
+          set({ activeJamId: jamId, isHost, jamMessages: [], reactions: [] })
+        } else {
+          set({ isHost })
+        }
+      },
+
+      leaveJam: () => {
+        const { howl } = get()
+        if (howl) {
+          howl.unload()
+        }
+        set({ 
+          activeJamId: null, 
+          isHost: false, 
+          currentTrack: null, 
+          isPlaying: false, 
+          howl: null,
+          currentTime: 0,
+          duration: 0,
+          jamMessages: [],
+          reactions: []
+        })
+      },
 
       setIsPlayerVisible: (isVisible) => set({ isPlayerVisible: isVisible }),
 
@@ -197,6 +242,26 @@ export const usePlayerStore = create<PlayerState>()(
           isLoading: false
         })
       },
+
+      addJamMessage: (message) => set((state) => ({ 
+        jamMessages: [...state.jamMessages, message] 
+      })),
+
+      setJamMessages: (messages) => set({ jamMessages: messages }),
+
+      addReaction: (reaction) => {
+        const id = Math.random()
+        set((state) => ({ 
+          reactions: [...state.reactions, { ...reaction, id }] 
+        }))
+        setTimeout(() => {
+          set((state) => ({ 
+            reactions: state.reactions.filter((r) => r.id !== id) 
+          }))
+        }, 3000)
+      },
+
+      clearJamData: () => set({ jamMessages: [], reactions: [] }),
     }),
     {
       name: 'musica-player-storage',
@@ -208,6 +273,8 @@ export const usePlayerStore = create<PlayerState>()(
         repeat: state.repeat,
         shuffle: state.shuffle,
         isPlaying: state.isPlaying,
+        activeJamId: state.activeJamId,
+        isHost: state.isHost,
       }),
     }
   )

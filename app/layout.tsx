@@ -44,7 +44,7 @@ export default function RootLayout({
               <Toaster richColors closeButton position="top-right" />
               <div className="flex flex-col min-h-screen">
                 <Navbar />
-                <main className="flex-1 pb-24">{children}</main>
+                <main className="flex-1">{children}</main>
                 <Player />
               </div>
             </QueryProvider>

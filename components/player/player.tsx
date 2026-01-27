@@ -2,7 +2,7 @@
 
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { usePlayerStore } from "@/lib/store/player-store"
 import { useQueryClient, useQuery } from "@tanstack/react-query"
 import { Howl } from "howler"
@@ -32,7 +32,19 @@ import {
   TrendingDown,
   Loader2,
   X,
+  Send,
+  Users,
+  Smile,
+  ExternalLink,
+  LogOut,
+  Trash2,
+  Settings,
 } from "lucide-react"
+import data from "@emoji-mart/data"
+import Picker from "@emoji-mart/react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { useSocket } from "@/hooks/use-socket"
 import Image from "next/image"
 import Link from "next/link"
 import { toast } from "sonner"
@@ -67,11 +79,47 @@ export function Player() {
     setCurrentTrack: selectTrack,
     isPlayerVisible,
     setIsPlayerVisible,
+    activeJamId,
+    isHost: isJamHost,
+    leaveJam,
+    jamMessages,
+    reactions,
+    addJamMessage,
+    setJamMessages,
+    addReaction,
   } = usePlayerStore()
+
+  const { data: session } = useSession()
+  const router = useRouter()
+  const { socket } = useSocket()
 
   const queryClient = useQueryClient()
   const [mounted, setMounted] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
+
+  const handleDeleteJam = async () => {
+    if (!activeJamId || !isJamHost) return
+    
+    if (!confirm("Are you sure you want to delete this listening party? This will end the session for everyone.")) {
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/jams/${activeJamId}`, {
+        method: "DELETE",
+      })
+
+      if (res.ok) {
+        toast.success("Listening party deleted")
+        leaveJam()
+        router.push("/")
+      } else {
+        toast.error("Failed to delete listening party")
+      }
+    } catch (error) {
+      toast.error("An error occurred")
+    }
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -79,7 +127,34 @@ export function Player() {
   const [activeTab, setActiveTab] = useState<'queue' | 'comments'>('queue')
   const [newComment, setNewComment] = useState("")
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const jamChatEndRef = useRef<HTMLDivElement>(null)
+
+  // Scroll to bottom of jam chat
+  useEffect(() => {
+    if (jamChatEndRef.current) {
+      jamChatEndRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    }
+  }, [jamMessages])
   
+  const addEmoji = (emoji: any) => {
+    setNewComment((prev) => prev + emoji.native)
+    setShowEmojiPicker(false)
+  }
+
+  // Close emoji picker on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const picker = document.getElementById('emoji-picker-container')
+      const button = document.getElementById('emoji-picker-button')
+      if (showEmojiPicker && picker && !picker.contains(event.target as Node) && button && !button.contains(event.target as Node)) {
+        setShowEmojiPicker(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showEmojiPicker])
   // Fetch like status with React Query
   const { data: likeData } = useQuery({
     queryKey: ["votes", "status", currentTrack?.id],
@@ -90,7 +165,6 @@ export function Player() {
     },
     enabled: !!currentTrack?.id,
   })
-
   // Fetch comments with React Query
   const { data: comments = [] } = useQuery({
     queryKey: ["comments", currentTrack?.id],
@@ -101,6 +175,150 @@ export function Player() {
     },
     enabled: !!currentTrack?.id,
   })
+
+  // Fetch Jam data if activeJamId is present
+  const { data: jam } = useQuery({
+    queryKey: ["jam", activeJamId],
+    queryFn: async () => {
+      const res = await fetch(`/api/jams/${activeJamId}`)
+      if (!res.ok) return null
+      return res.json()
+    },
+    enabled: !!activeJamId,
+    refetchInterval: 5000,
+  })
+
+  // Populate messages from DB when joining
+  useEffect(() => {
+    if (jam?.messages && jamMessages.length === 0) {
+      setJamMessages(jam.messages)
+    }
+  }, [jam?.messages, jamMessages.length, setJamMessages])
+
+  // Initial sync when joining a jam or when jam data updates
+  useEffect(() => {
+    if (jam && !isJamHost && mounted) {
+      const { currentTrack: jamTrack, isPlaying: jamIsPlaying, seekPosition, lastSyncAt } = jam;
+      
+      if (jamTrack && currentTrack?.id !== jamTrack.id) {
+        selectTrack(jamTrack);
+      }
+
+      const latency = lastSyncAt ? (Date.now() - new Date(lastSyncAt).getTime()) / 1000 : 0;
+      const targetPosition = jamIsPlaying ? seekPosition + latency : seekPosition;
+
+      if (jamIsPlaying && !isPlaying) play();
+      if (!jamIsPlaying && isPlaying) pause();
+
+      if (Math.abs(currentTime - targetPosition) > 3) {
+        seek(targetPosition);
+      }
+    }
+  }, [jam, isJamHost, mounted])
+
+  // Socket for Jam messages in player
+  // Socket for Jam messages and sync in player
+  useEffect(() => {
+    if (!socket || !activeJamId) return
+
+    const handleNewMessage = (msg: any) => {
+      if (msg.userId !== session?.user?.id) {
+        addJamMessage(msg)
+      }
+    }
+
+    socket.on("new-message", handleNewMessage)
+
+    socket.on("new-reaction", (reaction: any) => {
+      if (reaction.userId !== session?.user?.id) {
+        addReaction(reaction)
+      }
+    })
+
+    // Join jam room globally
+    socket.emit("join-jam", activeJamId)
+
+    // Playback sync for listeners
+    const handlePlaybackState = (state: any) => {
+      if (isJamHost) return // Host doesn't follow
+
+      const { track, isPlaying: jamIsPlaying, seekPosition, timestamp } = state
+      const latency = (Date.now() - timestamp) / 1000
+      const targetPosition = seekPosition + latency
+
+      // Sync track if different
+      if (currentTrack?.id !== track?.id && track) {
+        usePlayerStore.getState().setCurrentTrack(track)
+      }
+
+      // Sync play/pause
+      if (jamIsPlaying && !isPlaying) play()
+      if (!jamIsPlaying && isPlaying) pause()
+
+      // Sync position
+      const { currentTime: localTime } = usePlayerStore.getState()
+      if (Math.abs(localTime - targetPosition) > 2) {
+        seek(targetPosition)
+      }
+    }
+
+    socket.on("playback-state", handlePlaybackState)
+
+    return () => {
+      socket.off("new-message", handleNewMessage)
+      socket.off("playback-state", handlePlaybackState)
+    }
+  }, [socket, activeJamId, session?.user?.id, isJamHost, isPlaying, currentTrack?.id, play, pause, seek])
+
+  // Helper to broadcast playback state immediately
+  const broadcastPlayback = (overrideState?: any) => {
+    if (!isJamHost || !socket || !activeJamId || !currentTrack) return
+
+    socket.emit("sync-playback", {
+      jamId: activeJamId,
+      state: {
+        track: overrideState?.track || currentTrack,
+        isPlaying: overrideState?.isPlaying !== undefined ? overrideState.isPlaying : isPlaying,
+        seekPosition: overrideState?.seekPosition !== undefined ? overrideState.seekPosition : currentTime,
+        timestamp: Date.now(),
+      },
+    })
+  }
+
+  // Host: Broadcast playback state globally
+  useEffect(() => {
+    if (!isJamHost || !socket || !activeJamId || !currentTrack) return
+
+    const interval = setInterval(() => {
+      broadcastPlayback()
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [isJamHost, socket, activeJamId, currentTrack, isPlaying, currentTime])
+
+  const handleSendJamMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newComment.trim() || !socket || !activeJamId || !session?.user) return
+
+    const content = newComment;
+    setNewComment("");
+
+    try {
+      const res = await fetch(`/api/jams/${activeJamId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (res.ok) {
+        const msg = await res.json();
+        addJamMessage(msg);
+        socket.emit("send-message", { jamId: activeJamId, message: msg });
+      }
+    } catch (error) {
+      toast.error("Failed to send message");
+    }
+  }
 
   const isLiked = likeData?.type === "UP"
   
@@ -233,6 +451,102 @@ export function Player() {
     toast.success("Link copied to clipboard!")
   }
 
+  const handleNext = async () => {
+    if (activeJamId && isJamHost && jam?.queue) {
+      const currentIndex = jam.queue.findIndex((item: any) => item.track.id === currentTrack?.id)
+      let nextTrack;
+      if (currentIndex !== -1 && currentIndex < jam.queue.length - 1) {
+        nextTrack = jam.queue[currentIndex + 1].track
+      } else if (jam.queue.length > 0) {
+        // Circular: wrap around to the first track
+        nextTrack = jam.queue[0].track
+      }
+
+      if (nextTrack) {
+        try {
+          await fetch(`/api/jams/${activeJamId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ currentTrackId: nextTrack.id }),
+          })
+          selectTrack(nextTrack)
+          play()
+          broadcastPlayback({ track: nextTrack, isPlaying: true, seekPosition: 0 })
+        } catch (error) {
+          toast.error("Failed to skip track")
+        }
+      }
+    } else if (activeJamId && !isJamHost) {
+      toast.error("Only the host can skip tracks")
+    } else {
+      next()
+    }
+  }
+
+  const handleTogglePlay = () => {
+    const newIsPlaying = !isPlaying
+    togglePlay()
+    if (activeJamId && isJamHost) {
+      broadcastPlayback({ isPlaying: newIsPlaying })
+    }
+  }
+
+  const handlePrevious = async () => {
+    if (activeJamId && isJamHost && jam?.queue) {
+      if (currentTime > 3) {
+        seek(0)
+        play()
+        return
+      }
+      const currentIndex = jam.queue.findIndex((item: any) => item.track.id === currentTrack?.id)
+      let prevTrack;
+      if (currentIndex > 0) {
+        prevTrack = jam.queue[currentIndex - 1].track
+      } else if (jam.queue.length > 0) {
+        // Circular: wrap around to the last track
+        prevTrack = jam.queue[jam.queue.length - 1].track
+      }
+
+      if (prevTrack) {
+        try {
+          await fetch(`/api/jams/${activeJamId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ currentTrackId: prevTrack.id }),
+          })
+          selectTrack(prevTrack)
+          play()
+          broadcastPlayback({ track: prevTrack, isPlaying: true, seekPosition: 0 })
+        } catch (error) {
+          toast.error("Failed to skip track")
+        }
+      }
+    } else if (activeJamId && !isJamHost) {
+      toast.error("Only the host can skip tracks")
+    } else {
+      previous()
+    }
+  }
+
+  const handleJamQueueClick = async (track: any) => {
+    if (activeJamId && isJamHost) {
+      try {
+        await fetch(`/api/jams/${activeJamId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentTrackId: track.id }),
+        })
+        selectTrack(track)
+        play()
+        broadcastPlayback({ track, isPlaying: true, seekPosition: 0 })
+      } catch (error) {
+        toast.error("Failed to change track")
+      }
+    } else if (activeJamId && !isJamHost) {
+      toast.error("Only the host can change the track")
+    }
+  }
+
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!currentTrack || !newComment.trim() || isSubmittingComment) return
@@ -354,6 +668,12 @@ export function Player() {
     // Convert filename to streaming URL
     const streamUrl = `/api/stream/audio/${currentTrack.audioUrl}`
 
+    // Stop and unload any existing sounds globally before creating new one
+    // to prevent overlapping audio
+    if (typeof window !== 'undefined' && (window as any).Howler) {
+      (window as any).Howler.unload()
+    }
+
     const sound = new Howl({
       src: [streamUrl],
       html5: true,
@@ -379,7 +699,7 @@ export function Player() {
           sound.seek(0)
           sound.play()
         } else {
-          next()
+          handleNext()
         }
       },
     })
@@ -489,6 +809,19 @@ export function Player() {
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary-500/10 blur-[120px] rounded-full pointer-events-none" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary-500/5 blur-[120px] rounded-full pointer-events-none" />
         
+        {/* Reaction Overlay */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-[70]">
+          {reactions.map((r) => (
+            <div
+              key={r.id}
+              className="absolute bottom-0 left-1/2 -translate-x-1/2 animate-reaction text-4xl md:text-6xl"
+              style={{ left: `${40 + Math.random() * 20}%` }}
+            >
+              {r.reaction}
+            </div>
+          ))}
+        </div>
+        
         <div className="relative flex-1 container mx-auto max-w-7xl flex flex-col p-4 md:p-6 min-h-0">
           {/* Header - Reduced Margin */}
           <div className="flex items-center justify-between mb-2 md:mb-4 flex-shrink-0">
@@ -498,9 +831,50 @@ export function Player() {
             >
               <ChevronDown className="h-6 w-6 md:h-8 md:w-8" />
             </button>
-            <div className="text-center">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Now Playing</p>
-              <p className="text-xs md:text-sm font-semibold truncate max-w-[150px] md:max-w-none">{currentTrack.genre}</p>
+            <div className="text-center flex-1">
+              {activeJamId ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary-500/20 border border-primary-500/30">
+                    <Users className="h-3 w-3 text-primary-500" />
+                    <span className="text-[8px] font-black text-primary-500 uppercase tracking-widest">Listening Party</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Link 
+                      href={`/jams/${activeJamId}`}
+                      onClick={() => setIsExpanded(false)}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-500 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-primary-600 transition-all shadow-lg shadow-primary-500/20"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Go to Room
+                    </Link>
+                    <button 
+                      onClick={() => {
+                        leaveJam()
+                        setIsExpanded(false)
+                        toast.success("Left the listening party")
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-bold uppercase tracking-wider hover:bg-red-500/20 transition-all"
+                    >
+                      <LogOut className="h-3 w-3" />
+                      Leave
+                    </button>
+                    {isJamHost && (
+                      <button 
+                        onClick={handleDeleteJam}
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-red-700 transition-all shadow-lg shadow-red-600/20"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Now Playing</p>
+                  <p className="text-xs md:text-sm font-semibold truncate max-w-[150px] md:max-w-none">{currentTrack.genre}</p>
+                </>
+              )}
             </div>
             <div className="w-10 md:w-12" />
           </div>
@@ -562,7 +936,8 @@ export function Player() {
                         max={duration || 0}
                         value={currentTime}
                         onChange={handleSeek}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        disabled={activeJamId ? !isJamHost : false}
+                        className={`absolute inset-0 w-full h-full opacity-0 ${activeJamId && !isJamHost ? "cursor-default" : "cursor-pointer"}`}
                       />
                     </div>
                     <div className="flex justify-between text-[10px] font-mono text-muted-foreground/60">
@@ -572,22 +947,39 @@ export function Player() {
                   </div>
 
                   {/* Controls - Mobile */}
-                  <div className="flex items-center justify-center gap-8 pb-4">
-                    <button onClick={previous} className="text-foreground"><SkipBack className="h-8 w-8 fill-current" /></button>
-                    <button 
-                      onClick={togglePlay}
-                      className="p-5 bg-primary-500 text-white rounded-full shadow-xl"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                      ) : isPlaying ? (
-                        <Pause className="h-8 w-8 fill-current" />
-                      ) : (
-                        <Play className="h-8 w-8 fill-current ml-1" />
-                      )}
-                    </button>
-                    <button onClick={next} className="text-foreground"><SkipForward className="h-8 w-8 fill-current" /></button>
-                  </div>
+                  {(!activeJamId || isJamHost) && (
+                    <div className="flex items-center justify-center gap-8 pb-4">
+                      <button onClick={handlePrevious} className="text-foreground"><SkipBack className="h-8 w-8 fill-current" /></button>
+                      <button 
+                        onClick={handleTogglePlay}
+                        className="p-5 bg-primary-500 text-white rounded-full shadow-xl"
+                      >
+                        {isLoading ? (
+                          <Loader2 className="h-8 w-8 animate-spin" />
+                        ) : isPlaying ? (
+                          <Pause className="h-8 w-8 fill-current" />
+                        ) : (
+                          <Play className="h-8 w-8 fill-current ml-1" />
+                        )}
+                      </button>
+                      <button onClick={handleNext} className="text-foreground"><SkipForward className="h-8 w-8 fill-current" /></button>
+                    </div>
+                  )}
+
+                  {/* Reaction for Listeners - Mobile */}
+                  {activeJamId && !isJamHost && (
+                    <div className="flex items-center justify-center gap-4 pb-6">
+                      {['🔥', '❤️', '🙌', '😮', '👏'].map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => socket?.emit("send-reaction", { jamId: activeJamId, reaction: emoji, userId: session?.user?.id })}
+                          className="text-2xl hover:scale-125 transition-transform active:scale-95"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Mobile Volume Control */}
                   <div className="flex items-center justify-center gap-4 w-full px-8 pb-6">
@@ -608,78 +1000,158 @@ export function Player() {
               </div>
 
               {/* Right Side: Sidebar (Desktop Side-by-Side, Mobile Bottom) */}
-              <div className="w-full md:w-[450px] flex flex-col bg-white/5 backdrop-blur-2xl border border-white/10 shadow-2xl overflow-hidden rounded-none md:h-[min(50vw,600px)] flex-shrink-0">
+              <div className="w-full md:w-[450px] flex flex-col bg-card/50 backdrop-blur-2xl border border-border shadow-2xl rounded-none md:h-[min(50vw,600px)] flex-shrink-0 relative">
                 <div className="flex border-b border-white/10">
                   <button 
                     onClick={() => setActiveTab('queue')}
                     className={`flex-1 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${
-                      activeTab === 'queue' ? "text-primary-500 border-b-2 border-primary-500 bg-white/5" : "text-muted-foreground"
+                      activeTab === 'queue' ? "text-primary-500 border-b-2 border-primary-500 bg-primary-500/5" : "text-muted-foreground"
                     }`}
                   >
-                    Up Next
+                    {activeJamId ? "Jam Queue" : "Up Next"}
                   </button>
                   <button 
                     onClick={() => setActiveTab('comments')}
                     className={`flex-1 py-4 text-[10px] font-bold uppercase tracking-widest transition-all ${
-                      activeTab === 'comments' ? "text-primary-500 border-b-2 border-primary-500 bg-white/5" : "text-muted-foreground"
+                      activeTab === 'comments' ? "text-primary-500 border-b-2 border-primary-500 bg-primary-500/5" : "text-muted-foreground"
                     }`}
                   >
-                    Comments
+                    {activeJamId ? "Live Chat" : "Comments"}
                   </button>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-5 custom-scrollbar min-h-[300px] md:min-h-0">
+                <div className="flex-1 flex flex-col min-h-[300px] md:min-h-0 overflow-visible">
                   {activeTab === 'queue' ? (
-                    <div className="space-y-3">
-                      {queue.filter(t => t.id !== currentTrack?.id).map((track) => (
-                        <div key={track.id} onClick={() => selectTrack(track)} className="flex items-center gap-4 p-2.5 hover:bg-white/5 cursor-pointer group">
-                          <div className="relative h-12 w-12 flex-shrink-0">
-                            <Image src={track.coverUrl ? `/api/stream/image/${track.coverUrl}` : "/default-cover.jpg"} alt={track.title} fill className="object-cover" />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center"><Play className="h-4 w-4 text-white fill-current" /></div>
+                    <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-3">
+                      {activeJamId && jam ? (
+                        jam.queue.map((item: any) => (
+                          <div 
+                            key={item.id} 
+                            onClick={() => handleJamQueueClick(item.track)}
+                            className={`flex items-center gap-4 p-2.5 rounded-xl transition-all cursor-pointer ${item.track.id === currentTrack?.id ? "bg-primary-500/10 border border-primary-500/20" : "hover:bg-accent"}`}
+                          >
+                            <div className="relative h-12 w-12 flex-shrink-0">
+                              <Image src={item.track.coverUrl ? `/api/stream/image/${item.track.coverUrl}` : "/default-cover.jpg"} alt={item.track.title} fill className="object-cover rounded-lg" />
+                              {item.track.id === currentTrack?.id && (
+                                <div className="absolute inset-0 bg-primary-500/40 flex items-center justify-center rounded-lg">
+                                  <div className="flex gap-0.5">
+                                    <span className="w-0.5 h-3 bg-white animate-music-bar-1" />
+                                    <span className="w-0.5 h-4 bg-white animate-music-bar-2" />
+                                    <span className="w-0.5 h-3 bg-white animate-music-bar-3" />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-bold truncate text-xs ${item.track.id === currentTrack?.id ? "text-primary-500" : "text-foreground"}`}>{item.track.title}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{item.track.genre}</p>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-semibold truncate text-xs">{track.title}</p>
-                            <p className="text-[10px] text-muted-foreground truncate">{track.creator.username}</p>
+                        ))
+                      ) : (
+                        queue.filter(t => t.id !== currentTrack?.id).map((track) => (
+                          <div key={track.id} onClick={() => selectTrack(track)} className="flex items-center gap-4 p-2.5 hover:bg-accent cursor-pointer group">
+                            <div className="relative h-12 w-12 flex-shrink-0">
+                              <Image src={track.coverUrl ? `/api/stream/image/${track.coverUrl}` : "/default-cover.jpg"} alt={track.title} fill className="object-cover" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center"><Play className="h-4 w-4 text-white fill-current" /></div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold truncate text-xs">{track.title}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{track.creator.username}</p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   ) : (
-                    <div className="flex flex-col h-full">
-                      <form onSubmit={handleCommentSubmit} className="mb-4">
+                    <div className="flex flex-col h-full overflow-visible">
+                      <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-4">
+                        {activeJamId ? (
+                          <>
+                            {jamMessages.map((msg, i) => (
+                            <div key={i} className="flex gap-3 animate-in fade-in slide-in-from-bottom-2">
+                              <div className="h-8 w-8 rounded-full bg-primary-500/10 flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-primary-500 border border-primary-500/20">
+                                {msg.username?.[0].toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-bold text-xs text-foreground">{msg.username}</span>
+                                  <span className="text-[9px] text-muted-foreground">
+                                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-foreground leading-relaxed break-words bg-muted p-2 rounded-xl rounded-tl-none border border-border">
+                                  {msg.content}
+                                </p>
+                              </div>
+                            </div>
+                            ))}
+                            <div ref={jamChatEndRef} />
+                          </>
+                        ) : (
+                          comments.map((comment: any) => (
+                            <div key={comment.id} className="flex gap-3">
+                              <div className="h-8 w-8 bg-white/10 flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-primary-400">{comment.user.username[0].toUpperCase()}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-bold text-xs">{comment.user.username}</span>
+                                  <span className="text-[10px] text-muted-foreground">{new Date(comment.createdAt).toLocaleDateString()}</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground/90 leading-relaxed break-words">{comment.content}</p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                      
+                      <form onSubmit={activeJamId ? handleSendJamMessage : handleCommentSubmit} className="p-5 border-t border-border bg-muted/10 mt-auto relative overflow-visible">
                         <div className="relative">
+                          {showEmojiPicker && (
+                            <div id="emoji-picker-container" className="absolute bottom-full mb-2 right-0 z-[100]">
+                              <Picker 
+                                data={data} 
+                                onEmojiSelect={addEmoji}
+                                theme="auto"
+                                previewPosition="none"
+                                skinTonePosition="none"
+                              />
+                            </div>
+                          )}
                           <textarea
                             value={newComment}
                             onChange={(e) => setNewComment(e.target.value)}
-                            placeholder="Add a comment..."
-                            className="w-full bg-white/5 border border-white/10 p-3 text-xs outline-none focus:ring-1 focus:ring-primary-500 resize-none min-h-[80px]"
+                            placeholder={activeJamId ? "Say something to the party..." : "Add a comment..."}
+                            className="w-full bg-muted border border-border p-3 text-xs outline-none focus:ring-1 focus:ring-primary-500 resize-none min-h-[80px] rounded-xl text-foreground"
                           />
-                          <button type="submit" disabled={!newComment.trim() || isSubmittingComment} className="absolute bottom-3 right-3 bg-primary-500 text-white px-4 py-1.5 text-[10px] font-bold">Post</button>
+                          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                            <button
+                              id="emoji-picker-button"
+                              type="button"
+                              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                              className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-all"
+                            >
+                              <Smile className="h-4 w-4" />
+                            </button>
+                            <button 
+                              type="submit" 
+                              disabled={!newComment.trim() || isSubmittingComment} 
+                              className="bg-primary-500 hover:bg-primary-600 text-white p-2 rounded-lg transition-all disabled:opacity-50"
+                            >
+                              <Send className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
                       </form>
-                      <div className="space-y-4">
-                        {comments.map((comment: any) => (
-                          <div key={comment.id} className="flex gap-3">
-                            <div className="h-8 w-8 bg-white/10 flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-primary-400">{comment.user.username[0].toUpperCase()}</div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-bold text-xs">{comment.user.username}</span>
-                                <span className="text-[10px] text-muted-foreground">{new Date(comment.createdAt).toLocaleDateString()}</span>
-                              </div>
-                              <p className="text-xs text-muted-foreground/90 leading-relaxed break-words">{comment.content}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
                     </div>
                   )}
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Desktop Only: Bottom Row Controls */}
-            <div className="hidden md:flex flex-col w-full max-w-[calc(min(50vw,600px)+450px+4rem)] mx-auto mt-12 space-y-6 flex-shrink-0">
-              <div className="flex items-center justify-between gap-10">
+          {/* Desktop Only: Bottom Row Controls */}
+          <div className="hidden md:flex flex-col w-full max-w-[calc(min(50vw,600px)+450px+4rem)] mx-auto mt-12 space-y-6 flex-shrink-0">
+            <div className="flex items-center justify-between gap-10">
                 <div className="min-w-0 flex-1">
                   <h1 className="text-2xl font-bold tracking-tight truncate">{currentTrack?.title}</h1>
                   <Link href={`/user/${currentTrack?.creator?.id}`} className="text-base text-muted-foreground truncate hover:text-primary-500 hover:underline transition-colors block" onClick={() => setIsExpanded(false)}>
@@ -710,7 +1182,15 @@ export function Player() {
               <div className="space-y-2">
                 <div className="relative h-1.5 bg-white/10 rounded-full overflow-hidden">
                   <div className="h-full bg-primary-500" style={{ width: `${(currentTime / (duration || 1)) * 100}%` }} />
-                  <input type="range" min="0" max={duration || 0} value={currentTime} onChange={handleSeek} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max={duration || 0} 
+                    value={currentTime} 
+                    onChange={handleSeek} 
+                    disabled={activeJamId ? !isJamHost : false}
+                    className={`absolute inset-0 w-full h-full opacity-0 ${activeJamId && !isJamHost ? "cursor-default" : "cursor-pointer"}`} 
+                  />
                 </div>
                 <div className="flex justify-between text-[10px] font-mono text-muted-foreground/60">
                   <span>{formatTime(currentTime)}</span>
@@ -718,29 +1198,46 @@ export function Player() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pb-8">
-                <div className="w-48" /> {/* Spacer to balance volume */}
-                
-                <div className="flex items-center gap-16">
-                  <button onClick={toggleShuffle} className={shuffle ? "text-primary-500" : "text-muted-foreground/60"}><Shuffle className="h-5 w-5" /></button>
-                  <button onClick={previous} className="text-foreground"><SkipBack className="h-8 w-8 fill-current" /></button>
-                  <button onClick={togglePlay} className="p-5 bg-primary-500 text-white rounded-full shadow-xl hover:scale-105 transition-transform">
-                    {isLoading ? (
-                      <Loader2 className="h-8 w-8 animate-spin" />
-                    ) : isPlaying ? (
-                      <Pause className="h-8 w-8 fill-current" />
-                    ) : (
-                      <Play className="h-8 w-8 fill-current ml-1" />
-                    )}
-                  </button>
-                  <button onClick={next} className="text-foreground"><SkipForward className="h-8 w-8 fill-current" /></button>
-                  <button onClick={toggleRepeat} className={repeat !== "off" ? "text-primary-500" : "text-muted-foreground/60"}>
-                    {repeat === "one" ? <Repeat1 className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
-                  </button>
-                  <button onClick={handlePlaylistButtonClick} className="text-muted-foreground hover:text-primary-500 transition-colors">
-                    <ListPlus className="h-5 w-5" />
-                  </button>
-                </div>
+                <div className="flex items-center justify-between pb-8">
+                  <div className="w-48" /> {/* Spacer to balance volume */}
+                  
+                  {(!activeJamId || isJamHost) ? (
+                    <div className="flex items-center gap-16">
+                      <button onClick={toggleShuffle} className={shuffle ? "text-primary-500" : "text-muted-foreground/60"}><Shuffle className="h-5 w-5" /></button>
+                      <button onClick={handlePrevious} className="text-foreground"><SkipBack className="h-8 w-8 fill-current" /></button>
+                      <button onClick={handleTogglePlay} className="p-5 bg-primary-500 text-white rounded-full shadow-xl hover:scale-105 transition-transform">
+                        {isLoading ? (
+                          <Loader2 className="h-8 w-8 animate-spin" />
+                        ) : isPlaying ? (
+                          <Pause className="h-8 w-8 fill-current" />
+                        ) : (
+                          <Play className="h-8 w-8 fill-current ml-1" />
+                        )}
+                      </button>
+                      <button onClick={handleNext} className="text-foreground"><SkipForward className="h-8 w-8 fill-current" /></button>
+                      <button onClick={toggleRepeat} className={repeat !== "off" ? "text-primary-500" : "text-muted-foreground/60"}>
+                        {repeat === "one" ? <Repeat1 className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
+                      </button>
+                      <button onClick={handlePlaylistButtonClick} className="text-muted-foreground hover:text-primary-500 transition-colors">
+                        <ListPlus className="h-5 w-5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-8">
+                      {['🔥', '❤️', '🙌', '😮', '👏'].map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => {
+                            addReaction({ reaction: emoji, userId: session?.user?.id })
+                            socket?.emit("send-reaction", { jamId: activeJamId, reaction: emoji, userId: session?.user?.id })
+                          }}
+                          className="text-3xl hover:scale-125 transition-transform active:scale-95"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                 {/* Desktop Volume Control */}
                 <div className="flex items-center gap-3 w-48 justify-end">
@@ -757,17 +1254,15 @@ export function Player() {
                     className="w-24 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-primary-500"
                   />
                 </div>
-              </div>
             </div>
           </div>
-          </div>
+        </div>
       </div>
-
       <div className={`fixed bottom-0 left-0 right-0 z-50 p-4 pointer-events-none transition-all duration-500 ${
         !isExpanded && isPlayerVisible ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0"
       }`}>
       <div className="container mx-auto max-w-5xl pointer-events-auto">
-        <div className="bg-background/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 md:p-3 flex flex-col md:flex-row items-center gap-4 animate-slide-up">
+        <div className={`bg-background/80 backdrop-blur-xl border ${activeJamId ? "border-primary-500/30 shadow-[0_0_20px_-5px_rgba(59,130,246,0.3)]" : "border-white/10"} rounded-2xl shadow-2xl p-4 md:p-3 flex flex-col md:flex-row items-center gap-4 animate-slide-up`}>
           
           {/* Mobile Progress Bar (Top) */}
           <div className="w-full md:hidden flex items-center gap-2">
@@ -806,14 +1301,45 @@ export function Player() {
               </div>
               
               <div className="min-w-0 flex-1">
-                <p className="font-bold truncate text-sm">{currentTrack?.title}</p>
-                <Link 
-                  href={`/user/${currentTrack?.creator?.id}`} 
-                  className="text-xs text-muted-foreground truncate hover:text-primary-500 hover:underline transition-colors block w-fit"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {currentTrack?.creator?.username}
-                </Link>
+                {activeJamId ? (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary-500/10 border border-primary-500/20 w-fit">
+                      <Users className="h-2 w-2 text-primary-500" />
+                      <span className="text-[6px] font-black text-primary-500 uppercase tracking-widest">Listening Party</span>
+                    </div>
+                    <p className="font-bold truncate text-sm">{currentTrack?.title}</p>
+                    <div className="flex items-center gap-2">
+                      <Link 
+                        href={`/jams/${activeJamId}`}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-500 text-white text-[8px] font-bold uppercase tracking-wider hover:bg-primary-600 transition-all"
+                      >
+                        <ExternalLink className="h-2 w-2" />
+                        Back to Room
+                      </Link>
+                      <button 
+                        onClick={() => {
+                          leaveJam()
+                          toast.success("Left the listening party")
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 text-[8px] font-bold uppercase tracking-wider hover:bg-red-500/20 transition-all"
+                      >
+                        <LogOut className="h-2 w-2" />
+                        Leave
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="font-bold truncate text-sm">{currentTrack?.title}</p>
+                    <Link 
+                      href={`/user/${currentTrack?.creator?.id}`} 
+                      className="text-xs text-muted-foreground truncate hover:text-primary-500 hover:underline transition-colors block w-fit"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {currentTrack?.creator?.username}
+                    </Link>
+                  </>
+                )}
               </div>
               
               <div className="flex items-center gap-2">
@@ -840,26 +1366,43 @@ export function Player() {
                 <Shuffle className="h-5 w-5" />
               </button>
               
-              <div className="flex items-center gap-8">
-                <button onClick={previous} className="text-foreground">
-                  <SkipBack className="h-6 w-6 fill-current" />
-                </button>
-                <button 
-                  onClick={togglePlay}
-                  className="p-4 bg-primary-500 text-white rounded-full shadow-xl shadow-primary-500/20 active:scale-95 transition-all"
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  ) : isPlaying ? (
-                    <Pause className="h-6 w-6 fill-current" />
-                  ) : (
-                    <Play className="h-6 w-6 fill-current ml-0.5" />
-                  )}
-                </button>
-                <button onClick={next} className="text-foreground">
-                  <SkipForward className="h-6 w-6 fill-current" />
-                </button>
-              </div>
+                {(!activeJamId || isJamHost) ? (
+                  <div className="flex items-center gap-8">
+                    <button onClick={handlePrevious} className="text-foreground">
+                      <SkipBack className="h-6 w-6 fill-current" />
+                    </button>
+                    <button 
+                      onClick={handleTogglePlay}
+                      className="p-4 bg-primary-500 text-white rounded-full shadow-xl shadow-primary-500/20 active:scale-95 transition-all"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      ) : isPlaying ? (
+                        <Pause className="h-6 w-6 fill-current" />
+                      ) : (
+                        <Play className="h-6 w-6 fill-current ml-0.5" />
+                      )}
+                    </button>
+                    <button onClick={handleNext} className="text-foreground">
+                      <SkipForward className="h-6 w-6 fill-current" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-4">
+                    {['🔥', '❤️', '🙌'].map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          socket?.emit("send-reaction", { jamId: activeJamId, reaction: emoji, userId: session?.user?.id })
+                        }}
+                        className="text-xl hover:scale-125 transition-transform active:scale-95"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
               <div className="flex items-center gap-1">
                 <button 
@@ -896,105 +1439,153 @@ export function Player() {
             </div>
             
             <div className="min-w-0 flex-1">
-              <p className="font-semibold truncate text-sm md:text-base">{currentTrack?.title}</p>
-              <Link 
-                href={`/user/${currentTrack?.creator?.id}`} 
-                className="text-xs md:text-sm text-muted-foreground truncate hover:text-primary-500 hover:underline transition-colors block w-fit"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {currentTrack?.creator?.username}
-              </Link>
+              {activeJamId ? (
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary-500/10 border border-primary-500/20 w-fit">
+                    <Users className="h-2.5 w-2.5 text-primary-500" />
+                    <span className="text-[7px] font-black text-primary-500 uppercase tracking-widest">Listening Party</span>
+                  </div>
+                  <p className="font-semibold truncate text-sm md:text-base">{currentTrack?.title}</p>
+                  <div className="flex items-center gap-2">
+                    <Link 
+                      href={`/jams/${activeJamId}`}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-500 text-white text-[9px] font-bold uppercase tracking-wider hover:bg-primary-600 transition-all"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Back to Room
+                    </Link>
+                    <button 
+                      onClick={() => {
+                        leaveJam()
+                        toast.success("Left the listening party")
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 text-[9px] font-bold uppercase tracking-wider hover:bg-red-500/20 transition-all"
+                    >
+                      <LogOut className="h-3 w-3" />
+                      Leave
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="font-semibold truncate text-sm md:text-base">{currentTrack?.title}</p>
+                  <Link 
+                    href={`/user/${currentTrack?.creator?.id}`} 
+                    className="text-xs md:text-sm text-muted-foreground truncate hover:text-primary-500 hover:underline transition-colors block w-fit"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {currentTrack?.creator?.username}
+                  </Link>
+                </>
+              )}
             </div>
           </div>
 
           {/* Desktop Controls & Progress */}
           <div className="hidden md:flex flex-col items-center gap-2 w-full md:flex-[2]">
-            <div className="flex items-center gap-4 md:gap-6">
-              <button
-                onClick={toggleShuffle}
-                className={`p-2 rounded-full transition-colors ${
-                  shuffle
-                    ? "text-primary-500 bg-primary-500/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                <Shuffle className="h-4 w-4" />
-              </button>
-              
-              <button
-                onClick={previous}
-                className="p-2 text-foreground hover:text-primary-500 transition-colors"
-              >
-                <SkipBack className="h-5 w-5 fill-current" />
-              </button>
-              
-              <button
-                onClick={togglePlay}
-                className="p-3 bg-primary-500 hover:bg-primary-600 text-white rounded-full shadow-lg shadow-primary-500/30 transition-all hover:scale-105 active:scale-95"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-6 w-6 animate-spin" />
-                ) : isPlaying ? (
-                  <Pause className="h-6 w-6 fill-current" />
-                ) : (
-                  <Play className="h-6 w-6 fill-current ml-1" />
-                )}
-              </button>
-              
-              <button
-                onClick={next}
-                className="p-2 text-foreground hover:text-primary-500 transition-colors"
-              >
-                <SkipForward className="h-5 w-5 fill-current" />
-              </button>
-              
-              <button
-                onClick={toggleRepeat}
-                className={`p-2 rounded-full transition-colors ${
-                  repeat !== "off"
-                    ? "text-primary-500 bg-primary-500/10"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                {repeat === "one" ? (
-                  <Repeat1 className="h-4 w-4" />
-                ) : (
-                  <Repeat className="h-4 w-4" />
-                )}
-              </button>
-
-              <button onClick={handlePlaylistButtonClick} className="p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-primary-500">
-                <ListPlus className="h-4 w-4" />
-              </button>
-
-              <div className="flex items-center gap-2 group">
-                <button onClick={toggleMute} className="p-2 hover:bg-accent rounded-full text-muted-foreground hover:text-foreground">
-                  {isMuted || volume === 0 ? (
-                    <VolumeX className="h-4 w-4" />
+            {(!activeJamId || isJamHost) ? (
+              <div className="flex items-center gap-4 md:gap-6">
+                <button
+                  onClick={toggleShuffle}
+                  className={`p-2 rounded-full transition-colors ${
+                    shuffle
+                      ? "text-primary-500 bg-primary-500/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  <Shuffle className="h-4 w-4" />
+                </button>
+                
+                <button
+                  onClick={handlePrevious}
+                  className="p-2 text-foreground hover:text-primary-500 transition-colors"
+                >
+                  <SkipBack className="h-5 w-5 fill-current" />
+                </button>
+                
+                <button
+                  onClick={handleTogglePlay}
+                  className="p-3 bg-primary-500 hover:bg-primary-600 text-white rounded-full shadow-lg shadow-primary-500/30 transition-all hover:scale-105 active:scale-95"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : isPlaying ? (
+                    <Pause className="h-6 w-6 fill-current" />
                   ) : (
-                    <Volume2 className="h-4 w-4" />
+                    <Play className="h-6 w-6 fill-current ml-1" />
                   )}
                 </button>
-                <div className="w-0 overflow-hidden group-hover:w-24 transition-all duration-300">
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={volume}
-                    onChange={handleVolumeChange}
-                    className="w-24 h-1 bg-secondary rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500"
-                  />
+                
+                <button
+                  onClick={handleNext}
+                  className="p-2 text-foreground hover:text-primary-500 transition-colors"
+                >
+                  <SkipForward className="h-5 w-5 fill-current" />
+                </button>
+                
+                <button
+                  onClick={toggleRepeat}
+                  className={`p-2 rounded-full transition-colors ${
+                    repeat !== "off"
+                      ? "text-primary-500 bg-primary-500/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  {repeat === "one" ? (
+                    <Repeat1 className="h-4 w-4" />
+                  ) : (
+                    <Repeat className="h-4 w-4" />
+                  )}
+                </button>
+
+                <button onClick={handlePlaylistButtonClick} className="p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-primary-500">
+                  <ListPlus className="h-4 w-4" />
+                </button>
+
+                <div className="flex items-center gap-2 group">
+                  <button onClick={toggleMute} className="p-2 hover:bg-accent rounded-full text-muted-foreground hover:text-foreground">
+                    {isMuted || volume === 0 ? (
+                      <VolumeX className="h-4 w-4" />
+                    ) : (
+                      <Volume2 className="h-4 w-4" />
+                    )}
+                  </button>
+                  <div className="w-0 overflow-hidden group-hover:w-24 transition-all duration-300">
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={volume}
+                      onChange={handleVolumeChange}
+                      className="w-24 h-1 bg-secondary rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center gap-6">
+                {['🔥', '❤️', '🙌', '😮', '👏'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => {
+                      addReaction({ reaction: emoji, userId: session?.user?.id })
+                      socket?.emit("send-reaction", { jamId: activeJamId, reaction: emoji, userId: session?.user?.id })
+                    }}
+                    className="text-2xl hover:scale-125 transition-transform active:scale-95"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
             
             {/* Desktop Progress Bar */}
-            <div className="hidden md:flex items-center gap-3 w-full max-w-md">
+            <div className="flex items-center gap-3 w-full max-w-md">
               <span className="text-xs text-muted-foreground w-10 text-right font-mono">
                 {formatTime(currentTime)}
               </span>
-              <div className="relative flex-1 h-1 group cursor-pointer">
+              <div className="relative flex-1 h-1 group">
                 <div className="absolute inset-0 bg-secondary rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-primary-500 rounded-full"
@@ -1007,7 +1598,8 @@ export function Player() {
                   max={duration || 0}
                   value={currentTime}
                   onChange={handleSeek}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  disabled={activeJamId ? !isJamHost : false}
+                  className={`absolute inset-0 w-full h-full opacity-0 ${activeJamId && !isJamHost ? "cursor-default" : "cursor-pointer"}`}
                 />
               </div>
               <span className="text-xs text-muted-foreground w-10 font-mono">
@@ -1038,9 +1630,21 @@ export function Player() {
               <TrendingDown className={`h-4 w-4 ${likeData?.type === "DOWN" ? "fill-current" : ""}`} />
               <span className="text-[10px] font-bold">{currentTrack?.votes?.downs || 0}</span>
             </button>
+            {activeJamId && (
+              <button 
+                onClick={() => {
+                  leaveJam()
+                  toast.success("Left the listening party")
+                }}
+                className="p-2 hover:bg-red-500/10 rounded-full transition-colors text-red-500 ml-1"
+                title="Leave Jam"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            )}
             <button 
               onClick={() => setIsPlayerVisible(false)}
-              className="p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-foreground ml-2"
+              className="p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-foreground ml-1"
               title="Close Player"
             >
               <X className="h-4 w-4" />
@@ -1070,7 +1674,7 @@ export function Player() {
                   placeholder="New playlist name..."
                   value={newPlaylistName}
                   onChange={(e) => setNewPlaylistName(e.target.value)}
-                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-sm outline-none focus:ring-1 focus:ring-primary-500"
+                  className="flex-1 bg-muted border border-border rounded-lg px-4 py-2 text-sm outline-none focus:ring-1 focus:ring-primary-500 text-foreground"
                 />
                 <button 
                   type="submit" 
@@ -1106,7 +1710,7 @@ export function Player() {
                   <button
                     key={playlist.id}
                     onClick={() => addToPlaylist(playlist.id)}
-                    className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors group"
+                    className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-accent transition-colors group"
                   >
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 bg-primary-500/10 rounded-lg flex items-center justify-center">

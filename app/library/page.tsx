@@ -90,7 +90,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pt-8 pb-20">
+    <div className="min-h-screen bg-background pt-8 pb-32">
       <div className="container px-4 mx-auto space-y-8">
         {/* Header */}
         <div>

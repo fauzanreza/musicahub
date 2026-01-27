@@ -24,7 +24,17 @@ export async function GET(
             avatar: true,
           },
         },
-        currentTrack: true,
+        currentTrack: {
+          include: {
+            creator: {
+              select: {
+                id: true,
+                username: true,
+                avatar: true,
+              },
+            },
+          },
+        },
         members: {
           include: {
             user: {
@@ -43,6 +53,20 @@ export async function GET(
           orderBy: {
             position: "asc",
           },
+        },
+        messages: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+          take: 50,
         },
       },
     });
@@ -100,6 +124,7 @@ export async function PATCH(
         currentTrackId,
         isPlaying,
         seekPosition,
+        lastSyncAt: (isPlaying !== undefined || seekPosition !== undefined || currentTrackId !== undefined) ? new Date() : undefined,
       },
     });
 

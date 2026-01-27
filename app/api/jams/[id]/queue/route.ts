@@ -34,6 +34,15 @@ export async function POST(
       return new NextResponse("Track ID is required", { status: 400 });
     }
 
+    // Verify track exists
+    const track = await prisma.track.findUnique({
+      where: { id: trackId },
+    });
+
+    if (!track) {
+      return new NextResponse("Track not found", { status: 404 });
+    }
+
     // Get current max position
     const lastTrack = await prisma.jamTrack.findFirst({
       where: { jamId },
@@ -42,6 +51,7 @@ export async function POST(
 
     const position = lastTrack ? lastTrack.position + 1 : 0;
 
+    // Add to queue
     const jamTrack = await prisma.jamTrack.create({
       data: {
         jamId,
@@ -53,9 +63,20 @@ export async function POST(
       },
     });
 
+    // If no track is currently playing, set this as the current track
+    if (!jam.currentTrackId) {
+      await prisma.jam.update({
+        where: { id: jamId },
+        data: {
+          currentTrackId: trackId,
+          isPlaying: true,
+        },
+      });
+    }
+
     return NextResponse.json(jamTrack);
-  } catch (error) {
+  } catch (error: any) {
     console.error("[JAM_QUEUE_POST]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+    return new NextResponse(error.message || "Internal Error", { status: 500 });
   }
 }

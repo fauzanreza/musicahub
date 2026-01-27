@@ -81,12 +81,16 @@ export default function UploadPage() {
   }
 
   const validateAudio = (file: File) => {
-    if (!file.type.startsWith("audio/")) {
-      toast.error(`Invalid file type: ${file.name}`)
+    // Check if it's an audio file by MIME type or extension
+    const allowedExtensions = [".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac", ".opus", ".webm"]
+    const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'))
+    
+    if (!file.type.startsWith("audio/") && !allowedExtensions.includes(fileExtension)) {
+      toast.error(`Invalid file type: ${file.name}. Supported: MP3, WAV, OGG, FLAC, M4A, AAC, OPUS, WEBM`)
       return false
     }
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error(`File too large: ${file.name} (Max 50MB)`)
+    if (file.size > 100 * 1024 * 1024) {
+      toast.error(`File too large: ${file.name} (Max 100MB)`)
       return false
     }
     return true
@@ -258,7 +262,7 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4 py-12">
+    <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center bg-background px-4 py-12 pb-32">
       <div className="w-full max-w-3xl">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">Upload Your Music</h1>

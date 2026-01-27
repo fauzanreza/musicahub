@@ -56,15 +56,7 @@ export default function HomePage() {
     },
   })
 
-  // Fetch live jams
-  const { data: liveJams } = useQuery<any[]>({
-    queryKey: ["jams", "live"],
-    queryFn: async () => {
-      const res = await fetch("/api/jams")
-      if (!res.ok) throw new Error("Failed to fetch jams")
-      return res.json()
-    },
-  })
+
 
   // Vote mutation
   const voteMutation = useMutation({
@@ -119,7 +111,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background pt-8 pb-20">
+    <div className="min-h-screen bg-background pt-8 pb-32">
       <div className="container px-4 mx-auto space-y-12">
         {/* Header / Welcome */}
         <div className="flex items-center justify-between">
@@ -163,31 +155,21 @@ export default function HomePage() {
               </div>
               <Link
                 href="/jams"
-                className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-white text-primary-600 font-black hover:bg-primary-50 transition-all shadow-xl shadow-black/10 active:scale-95 group"
+                className="inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-white text-primary-600 font-black hover:scale-105 transition-all shadow-xl shadow-black/20 active:scale-95 group"
               >
                 Explore Parties
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
 
-            {liveJams && liveJams.length > 0 ? (
-              <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar max-w-full md:max-w-[50%]">
-                {liveJams.slice(0, 3).map((jam) => (
-                  <div key={jam.id} className="min-w-[220px] shrink-0">
-                    <JamCard jam={jam} />
-                  </div>
-                ))}
+            <div className="hidden md:flex items-center gap-6 opacity-40">
+              <div className="h-40 w-40 rounded-[2rem] bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm">
+                <Music className="h-16 w-16 text-white" />
               </div>
-            ) : (
-              <div className="hidden md:flex items-center gap-6 opacity-40">
-                <div className="h-40 w-40 rounded-[2rem] bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm">
-                  <Music className="h-16 w-16 text-white" />
-                </div>
-                <div className="h-40 w-40 rounded-[2rem] bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm">
-                  <Radio className="h-16 w-16 text-white" />
-                </div>
+              <div className="h-40 w-40 rounded-[2rem] bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur-sm">
+                <Radio className="h-16 w-16 text-white" />
               </div>
-            )}
+            </div>
           </div>
         </section>
 
