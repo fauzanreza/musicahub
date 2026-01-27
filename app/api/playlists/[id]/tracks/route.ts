@@ -12,7 +12,8 @@ interface RouteProps {
 export async function POST(request: NextRequest, { params }: RouteProps) {
   try {
     const session = await auth()
-    if (!session?.user?.id) {
+    const userId = session?.user?.id
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest, { params }: RouteProps) {
       return NextResponse.json({ error: "Playlist not found" }, { status: 404 })
     }
 
-    const userId = session.user.id
+
     if (playlist.userId !== userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }

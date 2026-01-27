@@ -60,7 +60,8 @@ export async function GET(request: NextRequest, { params }: RouteProps) {
 export async function PUT(request: NextRequest, { params }: RouteProps) {
   try {
     const session = await auth()
-    if (!session?.user?.id) {
+    const userId = session?.user?.id
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -77,7 +78,7 @@ export async function PUT(request: NextRequest, { params }: RouteProps) {
       return NextResponse.json({ error: "Track not found" }, { status: 404 })
     }
 
-    const userId = session.user.id
+
     if (track.creatorId !== userId) {
       return NextResponse.json(
         { error: "You do not have permission to edit this track" },
@@ -107,7 +108,8 @@ export async function PUT(request: NextRequest, { params }: RouteProps) {
 export async function DELETE(request: NextRequest, { params }: RouteProps) {
   try {
     const session = await auth()
-    if (!session?.user?.id) {
+    const userId = session?.user?.id
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -122,7 +124,7 @@ export async function DELETE(request: NextRequest, { params }: RouteProps) {
       return NextResponse.json({ error: "Track not found" }, { status: 404 })
     }
 
-    const userId = session.user.id
+
     if (track.creatorId !== userId) {
       return NextResponse.json(
         { error: "You do not have permission to delete this track" },

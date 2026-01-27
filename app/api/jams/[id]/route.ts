@@ -9,7 +9,8 @@ export async function GET(
   try {
     const { id } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
@@ -51,7 +52,7 @@ export async function GET(
     }
 
     // Check if user is a member
-    const isMember = jam.members.some((m) => m.userId === session.user.id);
+    const isMember = jam.members.some((m) => m.userId === userId);
     if (!isMember && !jam.isPublic) {
       return new NextResponse("Forbidden", { status: 403 });
     }
@@ -70,7 +71,8 @@ export async function PATCH(
   try {
     const { id } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
@@ -83,7 +85,7 @@ export async function PATCH(
     }
 
     // Only host can update jam settings
-    if (jam.hostId !== session.user.id) {
+    if (jam.hostId !== userId) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 
@@ -115,7 +117,8 @@ export async function DELETE(
   try {
     const { id } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
@@ -127,7 +130,7 @@ export async function DELETE(
       return new NextResponse("Jam not found", { status: 404 });
     }
 
-    if (jam.hostId !== session.user.id) {
+    if (jam.hostId !== userId) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 

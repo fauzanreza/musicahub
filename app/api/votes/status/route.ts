@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from "next/server"
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
-    if (!session?.user?.id) {
+    const userId = session?.user?.id
+    if (!userId) {
       return NextResponse.json({ type: null })
     }
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Track ID required" }, { status: 400 })
     }
 
-    const userId = session.user.id
+
     const vote = await prisma.vote.findUnique({
       where: {
         trackId_userId: {

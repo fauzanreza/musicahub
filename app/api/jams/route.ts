@@ -41,7 +41,8 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
@@ -76,10 +77,10 @@ export async function POST(req: Request) {
         name,
         isPublic,
         roomCode,
-        hostId: session.user.id,
+        hostId: userId,
         members: {
           create: {
-            userId: session.user.id,
+            userId: userId,
             role: "HOST",
           },
         },

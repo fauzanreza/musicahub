@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
-    if (!session?.user?.id) {
+    const userId = session?.user?.id
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -53,8 +54,6 @@ export async function POST(request: NextRequest) {
     if (!trackId || !content?.trim()) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 })
     }
-
-    const userId = session.user.id
 
     const comment = await prisma.comment.create({
       data: {

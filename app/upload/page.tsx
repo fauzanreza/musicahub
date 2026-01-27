@@ -245,8 +245,8 @@ export default function UploadPage() {
     const sessionRes = await fetch("/api/auth/session")
     const session = await sessionRes.json()
     
-    if (!session?.user?.id) throw new Error("Unauthorized")
-    const userId = session.user.id
+    const userId = session?.user?.id
+    if (!userId) throw new Error("Unauthorized")
 
     const res = await fetch("/api/tracks", {
       method: "POST",

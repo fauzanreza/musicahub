@@ -6,11 +6,10 @@ import { prisma } from "@/lib/prisma"
 export async function PUT(request: NextRequest) {
   try {
     const session = await auth()
-    if (!session?.user?.id) {
+    const userId = session?.user?.id
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
-    const userId = session.user.id
     const body = await request.json()
     const { username, bio, avatar } = body
 

@@ -9,7 +9,8 @@ export async function POST(
   try {
     const { id: jamId } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
@@ -22,7 +23,7 @@ export async function POST(
     }
 
     // Only host can add to queue
-    if (jam.hostId !== session.user.id) {
+    if (jam.hostId !== userId) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 

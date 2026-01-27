@@ -12,13 +12,14 @@ interface RouteProps {
 export async function POST(request: NextRequest, { params }: RouteProps) {
   try {
     const session = await auth()
-    if (!session?.user?.id) {
+    const userId = session?.user?.id
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { id: trackId } = await params
 
-    const userId = session.user.id
+
     // Check if user already liked
     const existingLike = await prisma.likedTrack.findUnique({
       where: {
@@ -59,13 +60,14 @@ export async function POST(request: NextRequest, { params }: RouteProps) {
 export async function GET(request: NextRequest, { params }: RouteProps) {
   try {
     const session = await auth()
-    if (!session?.user?.id) {
+    const userId = session?.user?.id
+    if (!userId) {
       return NextResponse.json({ liked: false })
     }
 
     const { id: trackId } = await params
 
-    const userId = session.user.id
+
     const like = await prisma.likedTrack.findUnique({
       where: {
         trackId_userId: {

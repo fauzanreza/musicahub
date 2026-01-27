@@ -24,7 +24,8 @@ import { useSocket } from "@/hooks/use-socket"
 import { usePlayerStore } from "@/lib/store/player-store"
 
 export default function JamPage() {
-  const { id } = useParams()
+  const params = useParams()
+  const id = params?.id as string
   const { data: session } = useSession()
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -163,8 +164,9 @@ export default function JamPage() {
   }
 
   const handleSendReaction = (type: string) => {
-    if (!socket || !session?.user) return
-    socket.emit("send-reaction", { jamId: jam.id, reaction: type, userId: session.user.id })
+    const userId = session?.user?.id
+    if (!socket || !userId) return
+    socket.emit("send-reaction", { jamId: jam.id, reaction: type, userId })
   }
 
   const copyRoomCode = () => {

@@ -9,7 +9,8 @@ export async function POST(
   try {
     const { id: jamId } = await params;
     const session = await auth();
-    if (!session?.user?.id) {
+    const currentUserId = session?.user?.id;
+    if (!currentUserId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
@@ -22,7 +23,7 @@ export async function POST(
     }
 
     // Only current host can promote others
-    if (jam.hostId !== session.user.id) {
+    if (jam.hostId !== currentUserId) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 
@@ -55,7 +56,7 @@ export async function POST(
       }),
       prisma.jamMember.update({
         where: {
-          jamId_userId: { jamId, userId: session.user.id },
+          jamId_userId: { jamId, userId: currentUserId },
         },
         data: { role: "LISTENER" },
       }),

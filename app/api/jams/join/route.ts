@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 export async function POST(req: Request) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
       where: {
         jamId_userId: {
           jamId: jam.id,
-          userId: session.user.id,
+          userId: userId,
         },
       },
     });
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
       await prisma.jamMember.create({
         data: {
           jamId: jam.id,
-          userId: session.user.id,
+          userId: userId,
           role: "LISTENER",
         },
       });
