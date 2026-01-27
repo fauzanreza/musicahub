@@ -3,7 +3,8 @@
 "use client"
 
 import Image from "next/image"
-import { Play, Heart, MessageCircle, TrendingUp, TrendingDown } from "lucide-react"
+import { Play, Heart, MessageCircle, TrendingUp, TrendingDown, Plus } from "lucide-react"
+import { toast } from "sonner"
 import { usePlayerStore, type Track } from "@/lib/store/player-store"
 import { useState } from "react"
 
@@ -25,7 +26,7 @@ interface TrackCardProps {
 }
 
 export function TrackCard({ track, onVote, onLike, userVote, isLiked }: TrackCardProps) {
-  const { setCurrentTrack, setQueue, play, currentTrack } = usePlayerStore()
+  const { setCurrentTrack, setQueue, play, currentTrack, activeJamId, isHost } = usePlayerStore()
   const [isHovered, setIsHovered] = useState(false)
 
   const isCurrentTrack = currentTrack?.id === track.id
@@ -34,6 +35,24 @@ export function TrackCard({ track, onVote, onLike, userVote, isLiked }: TrackCar
     setCurrentTrack(track)
     setQueue([track])
     play()
+  }
+
+  const handleAddToJam = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!activeJamId) return
+
+    try {
+      const res = await fetch(`/api/jams/${activeJamId}/queue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackId: track.id }),
+      })
+
+      if (!res.ok) throw new Error("Failed to add to queue")
+      toast.success("Added to jam queue!")
+    } catch (error) {
+      toast.error("Failed to add to jam")
+    }
   }
 
   const voteScore = (track.votes?.ups || 0) - (track.votes?.downs || 0)
@@ -56,13 +75,22 @@ export function TrackCard({ track, onVote, onLike, userVote, isLiked }: TrackCar
 
         {/* Play Button Overlay */}
         {(isHovered || isCurrentTrack) && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2">
             <button
               onClick={handlePlay}
               className="bg-primary-500 hover:bg-primary-600 rounded-full p-4 transition-transform hover:scale-110"
             >
               <Play className="h-6 w-6 text-white fill-white" />
             </button>
+            {activeJamId && isHost && (
+              <button
+                onClick={handleAddToJam}
+                className="bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-full p-4 transition-transform hover:scale-110 border border-white/20"
+                title="Add to Jam Queue"
+              >
+                <Plus className="h-6 w-6 text-white" />
+              </button>
+            )}
           </div>
         )}
       </div>

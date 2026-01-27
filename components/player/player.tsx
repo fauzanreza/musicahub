@@ -31,6 +31,7 @@ import {
   TrendingUp,
   TrendingDown,
   Loader2,
+  X,
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -64,6 +65,8 @@ export function Player() {
     queue,
     setQueue,
     setCurrentTrack: selectTrack,
+    isPlayerVisible,
+    setIsPlayerVisible,
   } = usePlayerStore()
 
   const queryClient = useQueryClient()
@@ -447,10 +450,38 @@ export function Player() {
   
   return (
     <>
+      {/* Floating Restore Button (Visible when player is hidden) */}
+      {!isPlayerVisible && (
+        <button
+          onClick={() => setIsPlayerVisible(true)}
+          className="fixed bottom-6 right-6 h-14 w-14 rounded-full bg-primary-600 text-white shadow-[0_0_30px_-5px_rgba(59,130,246,0.6)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-[100] group overflow-hidden animate-in fade-in zoom-in"
+          title="Show Player"
+        >
+          {currentTrack.coverUrl ? (
+            <Image 
+              src={`/api/stream/image/${currentTrack.coverUrl}`} 
+              alt="" 
+              fill 
+              className="object-cover opacity-40 group-hover:opacity-60 transition-opacity" 
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-primary-500 to-primary-700" />
+          )}
+          <div className="relative z-10 flex flex-col items-center">
+            <Music className="h-5 w-5 mb-0.5" />
+            <div className="flex gap-0.5">
+              <span className="w-0.5 h-2 bg-white animate-music-bar-1" />
+              <span className="w-0.5 h-3 bg-white animate-music-bar-2" />
+              <span className="w-0.5 h-2 bg-white animate-music-bar-3" />
+            </div>
+          </div>
+        </button>
+      )}
+
       {/* Expanded Player Overlay */}
       <div 
         className={`fixed inset-0 z-[60] bg-background transition-all duration-500 ease-in-out overflow-y-auto md:overflow-hidden flex flex-col ${
-          isExpanded ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
+          isExpanded && isPlayerVisible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
         }`}
       >
         {/* Dynamic Background Glow */}
@@ -732,7 +763,9 @@ export function Player() {
           </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 p-4 pointer-events-none">
+      <div className={`fixed bottom-0 left-0 right-0 z-50 p-4 pointer-events-none transition-all duration-500 ${
+        !isExpanded && isPlayerVisible ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0"
+      }`}>
       <div className="container mx-auto max-w-5xl pointer-events-auto">
         <div className="bg-background/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 md:p-3 flex flex-col md:flex-row items-center gap-4 animate-slide-up">
           
@@ -754,8 +787,99 @@ export function Player() {
             </span>
           </div>
 
-          {/* Track Info */}
-          <div className="flex items-center gap-3 w-full md:w-auto md:flex-1 min-w-0">
+          {/* Mobile Layout (Vertical Stack) */}
+          <div className="flex flex-col w-full md:hidden gap-4">
+            <div className="flex items-center gap-3">
+              <div 
+                className="relative h-14 w-14 flex-shrink-0 group cursor-pointer"
+                onClick={() => setIsExpanded(true)}
+              >
+                <Image
+                  src={currentTrack?.coverUrl ? `/api/stream/image/${currentTrack.coverUrl}` : "/default-cover.jpg"}
+                  alt={currentTrack?.title || "Track"}
+                  fill
+                  className="rounded-xl shadow-md object-cover"
+                />
+                <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Maximize2 className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              
+              <div className="min-w-0 flex-1">
+                <p className="font-bold truncate text-sm">{currentTrack?.title}</p>
+                <Link 
+                  href={`/user/${currentTrack?.creator?.id}`} 
+                  className="text-xs text-muted-foreground truncate hover:text-primary-500 hover:underline transition-colors block w-fit"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {currentTrack?.creator?.username}
+                </Link>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleLike}
+                  className={`p-2 transition-colors ${likeStatus?.liked ? "text-red-500" : "text-muted-foreground"}`}
+                >
+                  <Heart className={`h-5 w-5 ${likeStatus?.liked ? "fill-current" : ""}`} />
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setIsPlayerVisible(false) }}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors text-muted-foreground"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between px-2 pb-2">
+              <button 
+                onClick={toggleShuffle} 
+                className={`p-2 transition-colors ${shuffle ? "text-primary-500" : "text-muted-foreground"}`}
+              >
+                <Shuffle className="h-5 w-5" />
+              </button>
+              
+              <div className="flex items-center gap-8">
+                <button onClick={previous} className="text-foreground">
+                  <SkipBack className="h-6 w-6 fill-current" />
+                </button>
+                <button 
+                  onClick={togglePlay}
+                  className="p-4 bg-primary-500 text-white rounded-full shadow-xl shadow-primary-500/20 active:scale-95 transition-all"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  ) : isPlaying ? (
+                    <Pause className="h-6 w-6 fill-current" />
+                  ) : (
+                    <Play className="h-6 w-6 fill-current ml-0.5" />
+                  )}
+                </button>
+                <button onClick={next} className="text-foreground">
+                  <SkipForward className="h-6 w-6 fill-current" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button 
+                  onClick={toggleRepeat} 
+                  className={`p-2 transition-colors ${repeat !== "off" ? "text-primary-500" : "text-muted-foreground"}`}
+                >
+                  {repeat === "one" ? <Repeat1 className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
+                </button>
+                <button 
+                  onClick={handlePlaylistButtonClick} 
+                  className="p-2 text-muted-foreground hover:text-primary-500 transition-colors"
+                >
+                  <ListPlus className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop Layout (Horizontal) */}
+          <div className="hidden md:flex items-center gap-3 md:flex-1 min-w-0">
             <div 
               className="relative h-14 w-14 flex-shrink-0 group cursor-pointer"
               onClick={() => setIsExpanded(true)}
@@ -781,43 +905,10 @@ export function Player() {
                 {currentTrack?.creator?.username}
               </Link>
             </div>
-            
-                <div className="md:hidden flex items-center gap-3">
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); togglePlay() }}
-                    className="text-foreground hover:text-primary-500 transition-colors"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                    ) : isPlaying ? (
-                      <Pause className="h-6 w-6 fill-current" />
-                    ) : (
-                      <Play className="h-6 w-6 fill-current" />
-                    )}
-                  </button>
-                  <button 
-                    onClick={handleLike}
-                    className={`transition-colors ${likeStatus?.liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"}`}
-                  >
-                    <Heart className={`h-5 w-5 ${likeStatus?.liked ? "fill-current" : ""}`} />
-                  </button>
-                  <button 
-                    onClick={() => handleVote("UP")}
-                    className={`transition-colors ${likeData?.type === "UP" ? "text-primary-500" : "text-muted-foreground hover:text-primary-500"}`}
-                  >
-                    <TrendingUp className={`h-5 w-5 ${likeData?.type === "UP" ? "fill-current" : ""}`} />
-                  </button>
-                  <button 
-                    onClick={() => handleVote("DOWN")}
-                    className={`transition-colors ${likeData?.type === "DOWN" ? "text-red-500" : "text-muted-foreground hover:text-red-500"}`}
-                  >
-                    <TrendingDown className={`h-5 w-5 ${likeData?.type === "DOWN" ? "fill-current" : ""}`} />
-                  </button>
-                </div>
           </div>
 
           {/* Desktop Controls & Progress */}
-          <div className="flex flex-col items-center gap-2 w-full md:flex-[2]">
+          <div className="hidden md:flex flex-col items-center gap-2 w-full md:flex-[2]">
             <div className="flex items-center gap-4 md:gap-6">
               <button
                 onClick={toggleShuffle}
@@ -947,6 +1038,13 @@ export function Player() {
               <TrendingDown className={`h-4 w-4 ${likeData?.type === "DOWN" ? "fill-current" : ""}`} />
               <span className="text-[10px] font-bold">{currentTrack?.votes?.downs || 0}</span>
             </button>
+            <button 
+              onClick={() => setIsPlayerVisible(false)}
+              className="p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-foreground ml-2"
+              title="Close Player"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -1031,6 +1129,14 @@ export function Player() {
         </div>
       </div>
     )}
+    <style jsx global>{`
+      @keyframes music-bar-1 { 0%, 100% { height: 4px; } 50% { height: 10px; } }
+      @keyframes music-bar-2 { 0%, 100% { height: 10px; } 50% { height: 4px; } }
+      @keyframes music-bar-3 { 0%, 100% { height: 6px; } 50% { height: 12px; } }
+      .animate-music-bar-1 { animation: music-bar-1 1s ease-in-out infinite; }
+      .animate-music-bar-2 { animation: music-bar-2 0.8s ease-in-out infinite; }
+      .animate-music-bar-3 { animation: music-bar-3 1.2s ease-in-out infinite; }
+    `}</style>
     </>
   )
 }

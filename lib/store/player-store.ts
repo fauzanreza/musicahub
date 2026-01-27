@@ -32,6 +32,9 @@ interface PlayerState {
   isExpanded: boolean
   howl: Howl | null
   isLoading: boolean
+  activeJamId: string | null
+  isHost: boolean
+  isPlayerVisible: boolean
 
   // Actions
   setCurrentTrack: (track: Track) => void
@@ -50,6 +53,8 @@ interface PlayerState {
   setDuration: (duration: number) => void
   setHowl: (howl: Howl | null) => void
   setIsLoading: (isLoading: boolean) => void
+  setActiveJam: (jamId: string | null, isHost: boolean) => void
+  setIsPlayerVisible: (isVisible: boolean) => void
   clearQueue: () => void
 }
 
@@ -67,13 +72,16 @@ export const usePlayerStore = create<PlayerState>()(
       isExpanded: false,
       howl: null,
       isLoading: false,
+      activeJamId: null,
+      isHost: false,
+      isPlayerVisible: false,
 
       setCurrentTrack: (track) => {
         const { howl } = get()
         if (howl) {
           howl.unload()
         }
-        set({ currentTrack: track, isPlaying: true, currentTime: 0, isExpanded: true, isLoading: true })
+        set({ currentTrack: track, isPlaying: true, currentTime: 0, isExpanded: true, isLoading: true, isPlayerVisible: true })
       },
 
       setQueue: (tracks) => set({ queue: tracks }),
@@ -169,6 +177,10 @@ export const usePlayerStore = create<PlayerState>()(
       setDuration: (duration) => set({ duration }),
 
       setHowl: (howl) => set({ howl }),
+
+      setActiveJam: (jamId, isHost) => set({ activeJamId: jamId, isHost }),
+
+      setIsPlayerVisible: (isVisible) => set({ isPlayerVisible: isVisible }),
 
       clearQueue: () => {
         const { howl } = get()

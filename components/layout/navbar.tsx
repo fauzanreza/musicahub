@@ -4,7 +4,7 @@
 
 import Link from "next/link"
 import { useTheme } from "next-themes"
-import { Moon, Sun, Music, Search, Home, Upload, User, Menu, X, Library } from "lucide-react"
+import { Moon, Sun, Music, Search, Home, Upload, User, Menu, X, Library, Users, Radio } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useEffect, useState } from "react"
 
@@ -48,6 +48,7 @@ export function Navbar() {
             <>
               <NavLink href="/library" icon={<Library className="h-4 w-4" />} label="Library" />
               <NavLink href="/upload" icon={<Upload className="h-4 w-4" />} label="Upload" />
+              <NavLink href="/jams" icon={<Radio className="h-4 w-4" />} label="Listening Party" />
             </>
           )}
         </div>
@@ -109,6 +110,7 @@ export function Navbar() {
               <>
                 <MobileNavLink href="/library" icon={<Library className="h-4 w-4" />} label="Library" onClick={() => setIsMobileMenuOpen(false)} />
                 <MobileNavLink href="/upload" icon={<Upload className="h-4 w-4" />} label="Upload" onClick={() => setIsMobileMenuOpen(false)} />
+                <MobileNavLink href="/jams" icon={<Radio className="h-4 w-4" />} label="Listening Party" onClick={() => setIsMobileMenuOpen(false)} />
               </>
             )}
           </div>

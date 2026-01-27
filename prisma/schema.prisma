@@ -26,6 +26,9 @@ model User {
   likedTracks   LikedTrack[]
   playlists     Playlist[]
   playHistory   PlayHistory[]
+  hostedJams    Jam[]         @relation("JamHost")
+  jamMemberships JamMember[]
+  jamMessages   JamMessage[]
 
   @@index([username])
   @@index([email])
@@ -52,6 +55,8 @@ model Track {
   likedBy       LikedTrack[]
   playlistTracks PlaylistTrack[]
   playHistory   PlayHistory[]
+  jamTracks     JamTrack[]
+  currentInJams Jam[]
 
   @@index([creatorId])
   @@index([genre])
@@ -164,4 +169,75 @@ model PlayHistory {
 
   @@index([userId, playedAt])
   @@index([trackId])
+}
+model Jam {
+  id            String    @id @default(cuid())
+  name          String
+  isPublic      Boolean   @default(true)
+  roomCode      String?   @unique // 6 digit code for private rooms
+  
+  hostId        String
+  host          User      @relation("JamHost", fields: [hostId], references: [id], onDelete: Cascade)
+  
+  currentTrackId String?
+  currentTrack   Track?    @relation(fields: [currentTrackId], references: [id])
+  
+  isPlaying     Boolean   @default(false)
+  seekPosition  Float     @default(0)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  members       JamMember[]
+  queue         JamTrack[]
+  messages      JamMessage[]
+
+  @@index([hostId])
+  @@index([roomCode])
+}
+
+model JamMember {
+  id        String   @id @default(cuid())
+  jamId     String
+  jam       Jam      @relation(fields: [jamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      JamRole  @default(LISTENER)
+  joinedAt  DateTime @default(now())
+
+  @@unique([jamId, userId])
+  @@index([jamId])
+  @@index([userId])
+}
+
+enum JamRole {
+  HOST
+  LISTENER
+}
+
+model JamTrack {
+  id        String   @id @default(cuid())
+  jamId     String
+  jam       Jam      @relation(fields: [jamId], references: [id], onDelete: Cascade)
+  trackId   String
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  position  Int      @default(0)
+  addedAt   DateTime @default(now())
+
+  @@index([jamId])
+  @@index([trackId])
+}
+
+model JamMessage {
+  id        String   @id @default(cuid())
+  jamId     String
+  jam       Jam      @relation(fields: [jamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([jamId])
+  @@index([userId])
 }
