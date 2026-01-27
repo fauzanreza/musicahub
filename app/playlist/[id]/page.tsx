@@ -8,7 +8,8 @@ import { useParams } from "next/navigation"
 import Image from "next/image"
 
 export default function PlaylistPage() {
-  const { id } = useParams()
+  const params = useParams()
+  const id = params?.id as string
 
   const { data: playlist, isLoading } = useQuery({
     queryKey: ["playlist", id],

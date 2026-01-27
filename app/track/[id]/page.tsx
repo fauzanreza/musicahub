@@ -7,7 +7,8 @@ import { usePlayerStore } from "@/lib/store/player-store"
 import { Music } from "lucide-react"
 
 export default function TrackSharePage() {
-  const { id } = useParams()
+  const params = useParams()
+  const id = params?.id as string
   const router = useRouter()
   const { setCurrentTrack, setIsExpanded } = usePlayerStore()
 
