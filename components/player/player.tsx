@@ -30,6 +30,7 @@ import {
   Share2,
   TrendingUp,
   TrendingDown,
+  Loader2,
 } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -53,6 +54,8 @@ export function Player() {
     setVolume,
     toggleRepeat,
     toggleShuffle,
+    isLoading,
+    setIsLoading,
     setCurrentTime,
     setDuration,
     setHowl,
@@ -355,9 +358,18 @@ export function Player() {
       volume: volume,
       onload: () => {
         setDuration(sound.duration())
+        setIsLoading(false)
+      },
+      onloaderror: (id, err) => {
+        console.error("Load error:", err)
+        setIsLoading(false)
       },
       onplay: () => {
         requestAnimationFrame(updateProgress)
+      },
+      onplayerror: (id, err) => {
+        console.error("Play error:", err)
+        setIsLoading(false)
       },
       onend: () => {
         if (repeat === "one") {
@@ -370,12 +382,26 @@ export function Player() {
     })
 
     setHowl(sound)
-    if (isPlaying) {
+    const { isPlaying: currentIsPlaying } = usePlayerStore.getState()
+    if (currentIsPlaying && !sound.playing()) {
       sound.play()
     }
 
+    // Handle potential autoplay block
+    const resumeAudio = () => {
+      const { isPlaying: currentIsPlaying } = usePlayerStore.getState()
+      if (sound.state() === 'loaded' && currentIsPlaying && !sound.playing()) {
+        sound.play()
+      }
+      if (sound.playing() || !currentIsPlaying) {
+        window.removeEventListener('click', resumeAudio)
+      }
+    }
+    window.addEventListener('click', resumeAudio)
+
     return () => {
       sound.unload()
+      window.removeEventListener('click', resumeAudio)
     }
   }, [currentTrack?.id])
 
@@ -521,7 +547,13 @@ export function Player() {
                       onClick={togglePlay}
                       className="p-5 bg-primary-500 text-white rounded-full shadow-xl"
                     >
-                      {isPlaying ? <Pause className="h-8 w-8 fill-current" /> : <Play className="h-8 w-8 fill-current ml-1" />}
+                      {isLoading ? (
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                      ) : isPlaying ? (
+                        <Pause className="h-8 w-8 fill-current" />
+                      ) : (
+                        <Play className="h-8 w-8 fill-current ml-1" />
+                      )}
                     </button>
                     <button onClick={next} className="text-foreground"><SkipForward className="h-8 w-8 fill-current" /></button>
                   </div>
@@ -635,9 +667,6 @@ export function Player() {
                     <TrendingDown className={`h-6 w-6 ${likeData?.type === "DOWN" ? "fill-current" : ""}`} />
                     <span className="text-sm font-bold">{currentTrack?.votes?.downs || 0}</span>
                   </button>
-                  <button onClick={handlePlaylistButtonClick} className="text-muted-foreground hover:text-primary-500 transition-colors">
-                    <ListPlus className="h-6 w-6" />
-                  </button>
                   <button onClick={() => setActiveTab('comments')} className={`transition-colors ${activeTab === 'comments' ? "text-primary-500" : "text-muted-foreground hover:text-primary-500"}`}>
                     <MessageSquare className="h-6 w-6" />
                   </button>
@@ -665,11 +694,20 @@ export function Player() {
                   <button onClick={toggleShuffle} className={shuffle ? "text-primary-500" : "text-muted-foreground/60"}><Shuffle className="h-5 w-5" /></button>
                   <button onClick={previous} className="text-foreground"><SkipBack className="h-8 w-8 fill-current" /></button>
                   <button onClick={togglePlay} className="p-5 bg-primary-500 text-white rounded-full shadow-xl hover:scale-105 transition-transform">
-                    {isPlaying ? <Pause className="h-8 w-8 fill-current" /> : <Play className="h-8 w-8 fill-current ml-1" />}
+                    {isLoading ? (
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    ) : isPlaying ? (
+                      <Pause className="h-8 w-8 fill-current" />
+                    ) : (
+                      <Play className="h-8 w-8 fill-current ml-1" />
+                    )}
                   </button>
                   <button onClick={next} className="text-foreground"><SkipForward className="h-8 w-8 fill-current" /></button>
                   <button onClick={toggleRepeat} className={repeat !== "off" ? "text-primary-500" : "text-muted-foreground/60"}>
                     {repeat === "one" ? <Repeat1 className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
+                  </button>
+                  <button onClick={handlePlaylistButtonClick} className="text-muted-foreground hover:text-primary-500 transition-colors">
+                    <ListPlus className="h-5 w-5" />
                   </button>
                 </div>
 
@@ -749,7 +787,13 @@ export function Player() {
                     onClick={(e) => { e.stopPropagation(); togglePlay() }}
                     className="text-foreground hover:text-primary-500 transition-colors"
                   >
-                    {isPlaying ? <Pause className="h-6 w-6 fill-current" /> : <Play className="h-6 w-6 fill-current" />}
+                    {isLoading ? (
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    ) : isPlaying ? (
+                      <Pause className="h-6 w-6 fill-current" />
+                    ) : (
+                      <Play className="h-6 w-6 fill-current" />
+                    )}
                   </button>
                   <button 
                     onClick={handleLike}
@@ -797,7 +841,9 @@ export function Player() {
                 onClick={togglePlay}
                 className="p-3 bg-primary-500 hover:bg-primary-600 text-white rounded-full shadow-lg shadow-primary-500/30 transition-all hover:scale-105 active:scale-95"
               >
-                {isPlaying ? (
+                {isLoading ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : isPlaying ? (
                   <Pause className="h-6 w-6 fill-current" />
                 ) : (
                   <Play className="h-6 w-6 fill-current ml-1" />
@@ -825,6 +871,31 @@ export function Player() {
                   <Repeat className="h-4 w-4" />
                 )}
               </button>
+
+              <button onClick={handlePlaylistButtonClick} className="p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-primary-500">
+                <ListPlus className="h-4 w-4" />
+              </button>
+
+              <div className="flex items-center gap-2 group">
+                <button onClick={toggleMute} className="p-2 hover:bg-accent rounded-full text-muted-foreground hover:text-foreground">
+                  {isMuted || volume === 0 ? (
+                    <VolumeX className="h-4 w-4" />
+                  ) : (
+                    <Volume2 className="h-4 w-4" />
+                  )}
+                </button>
+                <div className="w-0 overflow-hidden group-hover:w-24 transition-all duration-300">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    className="w-24 h-1 bg-secondary rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500"
+                  />
+                </div>
+              </div>
             </div>
             
             {/* Desktop Progress Bar */}
@@ -856,9 +927,6 @@ export function Player() {
 
           {/* Volume & Extra Actions */}
           <div className="hidden md:flex items-center gap-2 flex-1 justify-end">
-             <button onClick={handlePlaylistButtonClick} className="p-2 hover:bg-accent rounded-full transition-colors text-muted-foreground hover:text-primary-500">
-              <ListPlus className="h-4 w-4" />
-            </button>
              <button 
               onClick={handleLike}
               className={`transition-colors ${likeStatus?.liked ? "text-red-500" : "text-muted-foreground hover:text-red-500"}`}
@@ -879,27 +947,6 @@ export function Player() {
               <TrendingDown className={`h-4 w-4 ${likeData?.type === "DOWN" ? "fill-current" : ""}`} />
               <span className="text-[10px] font-bold">{currentTrack?.votes?.downs || 0}</span>
             </button>
-            
-            <div className="flex items-center gap-2 group">
-              <button onClick={toggleMute} className="p-2 hover:bg-accent rounded-full text-muted-foreground hover:text-foreground">
-                {isMuted || volume === 0 ? (
-                  <VolumeX className="h-4 w-4" />
-                ) : (
-                  <Volume2 className="h-4 w-4" />
-                )}
-              </button>
-              <div className="w-0 overflow-hidden group-hover:w-24 transition-all duration-300">
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={volume}
-                  onChange={handleVolumeChange}
-                  className="w-24 h-1 bg-secondary rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary-500"
-                />
-              </div>
-            </div>
           </div>
         </div>
       </div>

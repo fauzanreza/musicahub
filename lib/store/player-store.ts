@@ -31,6 +31,7 @@ interface PlayerState {
   shuffle: boolean
   isExpanded: boolean
   howl: Howl | null
+  isLoading: boolean
 
   // Actions
   setCurrentTrack: (track: Track) => void
@@ -48,6 +49,7 @@ interface PlayerState {
   setCurrentTime: (time: number) => void
   setDuration: (duration: number) => void
   setHowl: (howl: Howl | null) => void
+  setIsLoading: (isLoading: boolean) => void
   clearQueue: () => void
 }
 
@@ -64,13 +66,14 @@ export const usePlayerStore = create<PlayerState>()(
       shuffle: false,
       isExpanded: false,
       howl: null,
+      isLoading: false,
 
       setCurrentTrack: (track) => {
         const { howl } = get()
         if (howl) {
           howl.unload()
         }
-        set({ currentTrack: track, isPlaying: true, currentTime: 0, isExpanded: true })
+        set({ currentTrack: track, isPlaying: true, currentTime: 0, isExpanded: true, isLoading: true })
       },
 
       setQueue: (tracks) => set({ queue: tracks }),
@@ -161,6 +164,8 @@ export const usePlayerStore = create<PlayerState>()(
 
       setCurrentTime: (time) => set({ currentTime: time }),
 
+      setIsLoading: (isLoading) => set({ isLoading }),
+
       setDuration: (duration) => set({ duration }),
 
       setHowl: (howl) => set({ howl }),
@@ -176,7 +181,8 @@ export const usePlayerStore = create<PlayerState>()(
           isPlaying: false, 
           howl: null,
           currentTime: 0,
-          duration: 0
+          duration: 0,
+          isLoading: false
         })
       },
     }),
