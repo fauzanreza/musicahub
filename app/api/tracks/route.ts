@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const sort = searchParams.get("sort") || "recent"
     const limit = parseInt(searchParams.get("limit") || "20")
     const query = searchParams.get("q")
+    const cursor = searchParams.get("cursor") // For pagination
 
     let orderBy: any = { createdAt: "desc" }
     let where: any = {}
@@ -36,7 +37,8 @@ export async function GET(request: NextRequest) {
     const tracks = await prisma.track.findMany({
       where,
       orderBy,
-      take: limit,
+      take: limit + 1, // Fetch one extra to determine if there's a next page
+      ...(cursor && { cursor: { id: cursor }, skip: 1 }), // Skip the cursor item
       include: {
         creator: {
           select: {
@@ -95,7 +97,16 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    return NextResponse.json(tracksWithVotes)
+    // Determine if there's a next page
+    const hasNextPage = tracksWithVotes.length > limit
+    const returnedTracks = hasNextPage ? tracksWithVotes.slice(0, limit) : tracksWithVotes
+    const nextCursor = hasNextPage ? returnedTracks[returnedTracks.length - 1].id : null
+
+    return NextResponse.json({
+      tracks: returnedTracks,
+      nextCursor,
+      hasNextPage
+    })
   } catch (error) {
     console.error("Error fetching tracks:", error)
     return NextResponse.json(

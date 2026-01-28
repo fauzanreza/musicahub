@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useState, useRef, useEffect } from "react"
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { TrackCard } from "@/components/tracks/track-card"
-import { Search, Music, Filter, ListMusic } from "lucide-react"
+import { Search, Music, Filter, ListMusic, Loader2 } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -31,6 +31,12 @@ interface Track {
   userVote: "UP" | "DOWN" | null
 }
 
+interface TracksResponse {
+  tracks: Track[]
+  nextCursor: string | null
+  hasNextPage: boolean
+}
+
 const GENRES = [
   "All",
   "Pop",
@@ -51,23 +57,54 @@ export default function ExplorePage() {
   const queryClient = useQueryClient()
   const { data: session } = useSession()
   const router = useRouter()
+  const loadMoreRef = useRef<HTMLDivElement>(null)
 
-  // Fetch tracks with filters
-  const { data: tracks, isLoading: isLoadingTracks } = useQuery<Track[]>({
+  // Fetch tracks with infinite scroll
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading: isLoadingTracks,
+  } = useInfiniteQuery<TracksResponse>({
     queryKey: ["tracks", "explore", searchQuery, selectedGenre],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = null }) => {
       const params = new URLSearchParams()
       if (searchQuery) params.append("q", searchQuery)
       if (selectedGenre !== "All") params.append("genre", selectedGenre)
+      if (pageParam) params.append("cursor", pageParam as string)
       
       const res = await fetch(`/api/tracks?${params.toString()}`)
       if (!res.ok) throw new Error("Failed to fetch tracks")
       return res.json()
     },
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: null,
   })
 
+  // Flatten all pages into a single array of tracks
+  const tracks = data?.pages.flatMap((page) => page.tracks) ?? []
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (!loadMoreRef.current) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    observer.observe(loadMoreRef.current)
+
+    return () => observer.disconnect()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+
   // Fetch public playlists
-  const { data: publicPlaylists, isLoading: isLoadingPlaylists } = useQuery({
+  const { data: publicPlaylists, isLoading: isLoadingPlaylists } = useInfiniteQuery({
     queryKey: ["playlists", "public", searchQuery],
     queryFn: async () => {
       const params = new URLSearchParams()
@@ -77,7 +114,11 @@ export default function ExplorePage() {
       if (!res.ok) throw new Error("Failed to fetch playlists")
       return res.json()
     },
+    getNextPageParam: () => null, // No pagination for playlists yet
+    initialPageParam: null,
   })
+
+  const playlists = publicPlaylists?.pages[0] ?? []
 
   // Vote mutation
   const voteMutation = useMutation({
@@ -188,9 +229,9 @@ export default function ExplorePage() {
                   <div key={i} className="h-24 w-64 flex-shrink-0 rounded-xl bg-muted/50 animate-pulse" />
                 ))}
               </div>
-            ) : publicPlaylists && publicPlaylists.length > 0 ? (
+            ) : playlists && playlists.length > 0 ? (
               <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-                {publicPlaylists.map((playlist: any) => (
+                {playlists.map((playlist: any) => (
                   <Link 
                     key={playlist.id}
                     href={`/playlist/${playlist.id}`}
@@ -228,18 +269,35 @@ export default function ExplorePage() {
               ))}
             </div>
           ) : tracks && tracks.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {tracks.map((track) => (
-                <TrackCard
-                  key={track.id}
-                  track={track}
-                  onVote={handleVote}
-                  onLike={handleLike}
-                  isLiked={track.isLiked}
-                  userVote={track.userVote}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                {tracks.map((track) => (
+                  <TrackCard
+                    key={track.id}
+                    track={track}
+                    onVote={handleVote}
+                    onLike={handleLike}
+                    isLiked={track.isLiked}
+                    userVote={track.userVote}
+                  />
+                ))}
+              </div>
+              
+              {/* Infinite scroll trigger */}
+              <div ref={loadMoreRef} className="flex justify-center py-8">
+                {isFetchingNextPage && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Loading more tracks...</span>
+                  </div>
+                )}
+                {!hasNextPage && tracks.length > 0 && (
+                  <p className="text-muted-foreground text-sm">
+                    You've reached the end! 🎵
+                  </p>
+                )}
+              </div>
+            </>
           ) : (
             <div className="text-center py-20">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
