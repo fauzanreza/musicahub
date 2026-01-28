@@ -6,9 +6,21 @@ import { nanoid } from "nanoid";
 // GET /api/jams - List public jams
 export async function GET() {
   try {
+    const session = await auth();
+    const userId = session?.user?.id;
+
     const jams = await prisma.jam.findMany({
       where: {
-        isPublic: true,
+        OR: [
+          { isPublic: true },
+          userId ? {
+            members: {
+              some: {
+                userId: userId
+              }
+            }
+          } : {}
+        ]
       },
       include: {
         host: {

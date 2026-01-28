@@ -133,10 +133,25 @@ export default function JamPage() {
 
 
 
-  // Set active jam in store
+  // Set active jam in store and force sync initial state
   useEffect(() => {
     if (jam && session?.user) {
       setActiveJam(jam.id, isHost)
+      
+      // Force update track if we're just joining or if it's different
+      if (jam.currentTrack && playerTrack?.id !== jam.currentTrack.id) {
+        setCurrentTrack(jam.currentTrack)
+        if (jam.isPlaying) {
+          play()
+        } else {
+          pause()
+        }
+      }
+      
+      // Sync queue
+      if (jam.queue) {
+        setPlayerQueue(jam.queue.map((item: any) => item.track))
+      }
     }
   }, [jam, session, isHost, setActiveJam])
 
@@ -200,11 +215,21 @@ export default function JamPage() {
     socket.emit("send-reaction", { jamId: jam.id, reaction: type, userId })
   }
 
-  const copyRoomCode = () => {
-    if (!jam?.roomCode) return
-    navigator.clipboard.writeText(jam.roomCode)
+  const handleShareInvitation = () => {
+    if (!jam) return
+    
+    let text = ""
+    const link = `${window.location.origin}/jams/${jam.id}`
+    
+    if (jam.isPublic) {
+      text = `Join my listening party on MusicaHub! 🎵\n${link}`
+    } else {
+      text = `Join my private listening party on MusicaHub! 🔒\n${link}\nCode: ${jam.roomCode}`
+    }
+    
+    navigator.clipboard.writeText(text)
     setCopied(true)
-    toast.success("Room code copied!")
+    toast.success("Invitation copied to clipboard!")
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -391,16 +416,18 @@ export default function JamPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {jam.roomCode && (
-              <button
-                onClick={copyRoomCode}
-                className="hidden sm:flex items-center gap-3 rounded-2xl bg-muted/50 px-4 py-2.5 text-sm font-bold hover:bg-muted transition-all border border-border group shrink-0"
-              >
-                <span className="text-muted-foreground group-hover:text-foreground transition-colors">ROOM CODE</span>
+            <button
+              onClick={handleShareInvitation}
+              className="hidden sm:flex items-center gap-3 rounded-2xl bg-muted/50 px-4 py-2.5 text-sm font-bold hover:bg-muted transition-all border border-border group shrink-0"
+            >
+              <span className="text-muted-foreground group-hover:text-foreground transition-colors">
+                {jam.isPublic ? "SHARE INVITE" : "INVITE CODE"}
+              </span>
+              {jam.roomCode && (
                 <span className="font-mono text-primary-500 tracking-wider">{jam.roomCode}</span>
-                {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />}
-              </button>
-            )}
+              )}
+              {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4 text-muted-foreground group-hover:text-foreground" />}
+            </button>
             
             <button
               onClick={() => {

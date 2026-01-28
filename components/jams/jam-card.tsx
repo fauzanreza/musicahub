@@ -1,12 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { Users, Music, Play } from "lucide-react"
+import { Users, Music, Play, ArrowRight } from "lucide-react"
 
 interface JamCardProps {
   jam: {
     id: string
     name: string
+    isPublic: boolean
     host: {
       username: string
       avatar: string | null
@@ -22,6 +23,8 @@ interface JamCardProps {
 }
 
 export function JamCard({ jam }: JamCardProps) {
+  const isPrivate = !jam.isPublic; // Assuming isPublic is available in jam object, if not we might need to update the interface
+
   return (
     <Link
       href={`/jams/${jam.id}`}
@@ -35,8 +38,18 @@ export function JamCard({ jam }: JamCardProps) {
         />
         
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <div className="h-12 w-12 rounded-full bg-primary-500 flex items-center justify-center shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-transform">
-            <Play className="h-6 w-6 text-white fill-current" />
+          <div className="flex items-center gap-2 px-6 py-3 rounded-full bg-primary-600 text-white font-bold shadow-xl transform translate-y-4 group-hover:translate-y-0 transition-transform hover:bg-primary-500 hover:scale-105 active:scale-95">
+            {isPrivate ? (
+               <>
+                 <span>Join</span>
+                 <ArrowRight className="h-4 w-4" />
+               </>
+            ) : (
+               <>
+                 <Play className="h-4 w-4 fill-current" />
+                 <span>Join Party</span>
+               </>
+            )}
           </div>
         </div>
 
