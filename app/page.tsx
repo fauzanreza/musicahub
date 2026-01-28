@@ -42,7 +42,8 @@ export default function HomePage() {
     queryFn: async () => {
       const res = await fetch("/api/tracks?sort=trending&limit=8")
       if (!res.ok) throw new Error("Failed to fetch tracks")
-      return res.json()
+      const data = await res.json()
+      return data.tracks || data
     },
   })
 
@@ -52,7 +53,8 @@ export default function HomePage() {
     queryFn: async () => {
       const res = await fetch("/api/tracks?sort=recent&limit=8")
       if (!res.ok) throw new Error("Failed to fetch tracks")
-      return res.json()
+      const data = await res.json()
+      return data.tracks || data
     },
   })
 

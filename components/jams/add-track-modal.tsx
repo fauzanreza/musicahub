@@ -35,7 +35,8 @@ export function AddTrackModal({ isOpen, onClose, jamId, onTrackAdded }: AddTrack
       if (searchQuery) params.set("q", searchQuery)
       const res = await fetch(`/api/tracks?${params}`)
       if (!res.ok) throw new Error("Failed to fetch tracks")
-      return res.json()
+      const data = await res.json()
+      return data.tracks || data
     },
     enabled: isOpen,
   })

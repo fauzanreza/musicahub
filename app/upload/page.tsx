@@ -4,19 +4,9 @@ import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Upload, Music, Image as ImageIcon, X, CheckCircle, AlertCircle, FileAudio } from "lucide-react"
 import { toast } from "sonner"
+import { GenreSelector } from "@/components/ui/genre-selector"
 
-const GENRES = [
-  "Pop",
-  "Rock",
-  "Hip Hop",
-  "Electronic",
-  "Jazz",
-  "Classical",
-  "R&B",
-  "Country",
-  "Indie",
-  "Alternative",
-]
+
 
 interface MassUploadFile {
   id: string
@@ -312,16 +302,12 @@ export default function UploadPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-2">Genre <span className="text-red-500">*</span></label>
-                <select
+                <GenreSelector
                   value={singleData.genre}
-                  onChange={(e) => setSingleData({ ...singleData, genre: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary-500 outline-none"
+                  onChange={(genre) => setSingleData({ ...singleData, genre })}
                   required
                   disabled={isSubmitting}
-                >
-                  <option value="">Select a genre</option>
-                  {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
-                </select>
+                />
               </div>
 
               {/* Single Audio Input */}
@@ -409,16 +395,12 @@ export default function UploadPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium mb-2">Album Genre <span className="text-red-500">*</span></label>
-                  <select
+                  <GenreSelector
                     value={massGenre}
-                    onChange={(e) => setMassGenre(e.target.value)}
-                    className="w-full px-4 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary-500 outline-none"
+                    onChange={setMassGenre}
                     required
                     disabled={isSubmitting}
-                  >
-                    <option value="">Select a genre for all tracks</option>
-                    {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
-                  </select>
+                  />
                 </div>
 
                 <div>

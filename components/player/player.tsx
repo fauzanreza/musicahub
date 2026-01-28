@@ -363,7 +363,8 @@ export function Player() {
         let recommendations: any[] = []
         
         if (res.ok) {
-          const tracks = await res.json()
+          const data = await res.json()
+          const tracks = data.tracks || data
           recommendations = tracks.filter((t: any) => t.id !== currentTrack.id)
         }
 
@@ -371,7 +372,8 @@ export function Player() {
         if (recommendations.length < 5) {
           const randomRes = await fetch(`/api/tracks?sort=trending&limit=10`)
           if (randomRes.ok) {
-            const randomTracks = await randomRes.json()
+            const data = await randomRes.json()
+            const randomTracks = data.tracks || data
             const additional = randomTracks.filter((t: any) => 
               t.id !== currentTrack.id && 
               !recommendations.some((rec: any) => rec.id === t.id)

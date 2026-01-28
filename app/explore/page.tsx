@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { TrackCard } from "@/components/tracks/track-card"
-import { Search, Music, Filter, ListMusic, Loader2 } from "lucide-react"
+import { Search, Music, Filter, ListMusic, Loader2, Plus, X } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -54,10 +54,15 @@ const GENRES = [
 export default function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedGenre, setSelectedGenre] = useState("All")
+  const [customGenres, setCustomGenres] = useState<string[]>([])
+  const [showGenreInput, setShowGenreInput] = useState(false)
+  const [newGenreInput, setNewGenreInput] = useState("")
   const queryClient = useQueryClient()
   const { data: session } = useSession()
   const router = useRouter()
   const loadMoreRef = useRef<HTMLDivElement>(null)
+
+  const allGenres = [...GENRES, ...customGenres]
 
   // Fetch tracks with infinite scroll
   const {
@@ -199,7 +204,7 @@ export default function ExplorePage() {
             />
           </div>
           <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-            {GENRES.map((genre) => (
+            {allGenres.map((genre) => (
               <button
                 key={genre}
                 onClick={() => setSelectedGenre(genre)}
@@ -210,8 +215,63 @@ export default function ExplorePage() {
                 }`}
               >
                 {genre}
+                {customGenres.includes(genre) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setCustomGenres(customGenres.filter(g => g !== genre))
+                      if (selectedGenre === genre) setSelectedGenre("All")
+                    }}
+                    className="ml-2 hover:text-red-500"
+                  >
+                    <X className="h-3 w-3 inline" />
+                  </button>
+                )}
               </button>
             ))}
+            {!showGenreInput ? (
+              <button
+                onClick={() => setShowGenreInput(true)}
+                className="px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap bg-secondary text-secondary-foreground hover:bg-accent transition-colors flex items-center gap-1"
+                title="Add custom genre"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 bg-secondary rounded-full px-2 py-1">
+                <input
+                  type="text"
+                  value={newGenreInput}
+                  onChange={(e) => setNewGenreInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newGenreInput.trim()) {
+                      const trimmed = newGenreInput.trim()
+                      if (!allGenres.includes(trimmed)) {
+                        setCustomGenres([...customGenres, trimmed])
+                        setSelectedGenre(trimmed)
+                      }
+                      setNewGenreInput("")
+                      setShowGenreInput(false)
+                    } else if (e.key === "Escape") {
+                      setShowGenreInput(false)
+                      setNewGenreInput("")
+                    }
+                  }}
+                  placeholder="Add genre..."
+                  className="w-32 px-2 py-1 text-sm bg-background rounded-full outline-none"
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    setShowGenreInput(false)
+                    setNewGenreInput("")
+                  }}
+                  className="p-1 hover:bg-accent rounded-full"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
