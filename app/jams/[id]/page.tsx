@@ -306,6 +306,7 @@ export default function JamPage() {
           jamId: jam.id, 
           state: { 
             currentTrackId: nextTrack.id, 
+            track: nextTrack,
             isPlaying: true, 
             seekPosition: 0 
           } 
@@ -337,6 +338,7 @@ export default function JamPage() {
           jamId: jam.id, 
           state: { 
             currentTrackId: prevTrack.id, 
+            track: prevTrack,
             isPlaying: true, 
             seekPosition: 0 
           } 

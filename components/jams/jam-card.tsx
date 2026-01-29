@@ -62,7 +62,7 @@ export function JamCard({ jam }: JamCardProps) {
       <div className="space-y-1">
         <h3 className="font-bold truncate text-sm">{jam.name}</h3>
         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span className="truncate">Host: {jam.host.username}</span>
+          <span className="truncate">Host: {jam.host?.username}</span>
           <div className="flex items-center gap-1 shrink-0">
             <Users className="h-3 w-3" />
             {jam._count.members}

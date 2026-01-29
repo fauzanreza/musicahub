@@ -1130,7 +1130,7 @@ export function Player() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-semibold truncate text-xs">{track.title}</p>
-                              <p className="text-[10px] text-muted-foreground truncate">{track.creator.username}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{track.creator?.username}</p>
                             </div>
                           </div>
                         ))

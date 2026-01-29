@@ -129,7 +129,7 @@ export function AddTrackModal({ isOpen, onClose, jamId, onTrackAdded }: AddTrack
                 <div className="flex-1 min-w-0">
                   <h3 className="font-black text-foreground truncate tracking-tight">{track.title}</h3>
                   <p className="text-sm text-muted-foreground font-bold truncate mt-0.5">
-                    {track.creator.username} <span className="text-muted-foreground/30 mx-1">•</span> {track.genre}
+                    {track.creator?.username} <span className="text-muted-foreground/30 mx-1">•</span> {track.genre}
                   </p>
                 </div>
                 <button

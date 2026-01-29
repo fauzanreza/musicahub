@@ -48,7 +48,17 @@ export async function GET(
         },
         queue: {
           include: {
-            track: true,
+            track: {
+              include: {
+                creator: {
+                  select: {
+                    id: true,
+                    username: true,
+                    avatar: true,
+                  },
+                },
+              },
+            },
           },
           orderBy: {
             position: "asc",
