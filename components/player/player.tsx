@@ -125,6 +125,8 @@ export function Player() {
     setMounted(true)
   }, [])
   const [activeTab, setActiveTab] = useState<'queue' | 'comments'>('queue')
+  const [upNextMode, setUpNextMode] = useState<'mix' | 'similar' | 'popular'>('mix')
+  const prevModeRef = useRef(upNextMode)
   const [newComment, setNewComment] = useState("")
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -352,25 +354,52 @@ export function Player() {
   const [isPublicPlaylist, setIsPublicPlaylist] = useState(true)
   const [isCreatingPlaylist, setIsCreatingPlaylist] = useState(false)
 
-  // Auto-populate queue with same genre tracks
+  // Auto-populate queue with recommendations based on mode
   useEffect(() => {
     const fetchRecommendations = async () => {
-      if (!currentTrack) return
+      if (!currentTrack || activeJamId) return
+
+      const modeChanged = prevModeRef.current !== upNextMode
+      prevModeRef.current = upNextMode
+
+      // Only fetch if queue is empty/near-empty OR if mode explicitly changed
+      if (queue.length > 1 && !modeChanged) return
 
       try {
-        // Fetch tracks from same genre
-        const res = await fetch(`/api/tracks?genre=${encodeURIComponent(currentTrack.genre)}&limit=10`)
+        let url = `/api/tracks?limit=50` // Fetch larger pool for better mixing
+        
+        if (upNextMode === 'similar') {
+          url += `&genre=${encodeURIComponent(currentTrack.genre)}`
+        } else if (upNextMode === 'popular') {
+          url += `&sort=popular`
+        } else {
+          // Mix: fetch trending/recent to get a pool
+          url += `&sort=trending`
+        }
+
+        const res = await fetch(url)
         let recommendations: any[] = []
         
         if (res.ok) {
           const data = await res.json()
           const tracks = data.tracks || data
-          recommendations = tracks.filter((t: any) => t.id !== currentTrack.id)
+          
+          // Filter out current track
+          let filtered = tracks.filter((t: any) => t.id !== currentTrack.id)
+          
+          // Shuffle for freshness (unless strictly popular, but even then user wants fresh)
+          // For 'popular', we might want to keep order, but maybe shuffle slightly?
+          // The user request "recommendation is always same... make me frustated" implies they hate static lists.
+          // So we shuffle everything for now, maybe less for popular?
+          // Let's shuffle all for "freshness" as requested.
+          filtered = filtered.sort(() => Math.random() - 0.5)
+          
+          recommendations = filtered.slice(0, 20)
         }
 
-        // If we have few recommendations (genre running out), fetch random tracks from other genres
-        if (recommendations.length < 5) {
-          const randomRes = await fetch(`/api/tracks?sort=trending&limit=10`)
+        // Fallback for 'similar' if running out of genre
+        if (recommendations.length < 5 && upNextMode === 'similar') {
+          const randomRes = await fetch(`/api/tracks?sort=trending&limit=20`)
           if (randomRes.ok) {
             const data = await randomRes.json()
             const randomTracks = data.tracks || data
@@ -378,21 +407,21 @@ export function Player() {
               t.id !== currentTrack.id && 
               !recommendations.some((rec: any) => rec.id === t.id)
             )
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 20 - recommendations.length)
+            
             recommendations = [...recommendations, ...additional]
           }
         }
         
-        // If queue is empty or only contains current track, set the new queue
-        if (queue.length <= 1) {
-          setQueue([currentTrack, ...recommendations])
-        }
+        setQueue([currentTrack, ...recommendations])
       } catch (error) {
         console.error("Failed to fetch recommendations:", error)
       }
     }
 
     fetchRecommendations()
-  }, [currentTrack?.id])
+  }, [currentTrack?.id, upNextMode, activeJamId])
 
   // Fetch like status with React Query
   const { data: likeStatus } = useQuery({
@@ -1046,7 +1075,27 @@ export function Player() {
                 
                 <div className="flex-1 flex flex-col min-h-[300px] md:min-h-0 overflow-visible">
                   {activeTab === 'queue' ? (
-                    <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-3">
+                    <div className="flex flex-col h-full">
+                      {/* Up Next Mode Selector */}
+                      {!activeJamId && (
+                        <div className="flex items-center gap-2 p-3 px-5 border-b border-white/5 flex-shrink-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+                          {(['mix', 'similar', 'popular'] as const).map((mode) => (
+                            <button
+                              key={mode}
+                              onClick={() => setUpNextMode(mode)}
+                              className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all ${
+                                upNextMode === mode 
+                                  ? "bg-primary-500 text-white shadow-lg shadow-primary-500/20 scale-105" 
+                                  : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                              }`}
+                            >
+                              {mode === 'mix' ? 'Mix All' : mode}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-3">
                       {activeJamId && jam ? (
                         jam.queue.map((item: any) => (
                           <div 
@@ -1086,6 +1135,7 @@ export function Player() {
                           </div>
                         ))
                       )}
+                    </div>
                     </div>
                   ) : (
                     <div className="flex flex-col h-full overflow-visible">
