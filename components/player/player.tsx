@@ -746,6 +746,13 @@ export function Player() {
       onplayerror: (id, err) => {
         console.error("Play error:", err)
         setIsLoading(false)
+        toast.error("Playback blocked. Click anywhere to play.", {
+          duration: 5000,
+          action: {
+            label: "Play",
+            onClick: () => sound.play()
+          }
+        })
       },
       onend: () => {
         if (repeat === "one") {
@@ -755,29 +762,42 @@ export function Player() {
           handleNext()
         }
       },
+      onunlock: () => {
+        // Resume playback if it was supposed to be playing
+        const { isPlaying: currentIsPlaying } = usePlayerStore.getState()
+        if (currentIsPlaying && !sound.playing()) {
+          sound.play()
+        }
+      }
     })
 
     setHowl(sound)
     const { isPlaying: currentIsPlaying } = usePlayerStore.getState()
+    
+    // Try to play immediately
     if (currentIsPlaying && !sound.playing()) {
       sound.play()
     }
 
-    // Handle potential autoplay block
-    const resumeAudio = () => {
-      const { isPlaying: currentIsPlaying } = usePlayerStore.getState()
-      if (sound.state() === 'loaded' && currentIsPlaying && !sound.playing()) {
-        sound.play()
-      }
-      if (sound.playing() || !currentIsPlaying) {
-        window.removeEventListener('click', resumeAudio)
+    // Robust autoplay unlocker
+    const unlockAudio = () => {
+      if (typeof window !== 'undefined' && (window as any).Howler?.ctx?.state === 'suspended') {
+        (window as any).Howler.ctx.resume().then(() => {
+          const { isPlaying: currentIsPlaying } = usePlayerStore.getState()
+          if (currentIsPlaying && !sound.playing()) {
+            sound.play()
+          }
+        })
       }
     }
-    window.addEventListener('click', resumeAudio)
+
+    // Add listeners for user interaction
+    const events = ['click', 'touchstart', 'keydown']
+    events.forEach(event => document.addEventListener(event, unlockAudio, { once: true }))
 
     return () => {
       sound.unload()
-      window.removeEventListener('click', resumeAudio)
+      events.forEach(event => document.removeEventListener(event, unlockAudio))
     }
   }, [currentTrack?.id])
 
