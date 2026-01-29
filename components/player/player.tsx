@@ -259,7 +259,14 @@ export function Player() {
       }
 
       // Sync play/pause
-      if (jamIsPlaying && !isPlaying) play()
+      if (jamIsPlaying && !isPlaying) {
+        play()
+        // Force check if blocked
+        const { howl } = usePlayerStore.getState()
+        if (howl && howl.state() === 'loaded' && !howl.playing()) {
+           howl.play()
+        }
+      }
       if (!jamIsPlaying && isPlaying) pause()
 
       // Sync position
@@ -781,8 +788,9 @@ export function Player() {
 
     // Robust autoplay unlocker
     const unlockAudio = () => {
-      if (typeof window !== 'undefined' && (window as any).Howler?.ctx?.state === 'suspended') {
-        (window as any).Howler.ctx.resume().then(() => {
+      const ctx = (window as any).Howler?.ctx;
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().then(() => {
           const { isPlaying: currentIsPlaying } = usePlayerStore.getState()
           if (currentIsPlaying && !sound.playing()) {
             sound.play()
