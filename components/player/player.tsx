@@ -271,7 +271,7 @@ export function Player() {
 
       // Sync position
       const { currentTime: localTime } = usePlayerStore.getState()
-      if (Math.abs(localTime - targetPosition) > 2) {
+      if (seekPosition !== undefined && Math.abs(localTime - targetPosition) > 2) {
         seek(targetPosition)
       }
     }
@@ -791,8 +791,9 @@ export function Player() {
       const ctx = (window as any).Howler?.ctx;
       if (ctx && ctx.state === 'suspended') {
         ctx.resume().then(() => {
-          const { isPlaying: currentIsPlaying } = usePlayerStore.getState()
-          if (currentIsPlaying && !sound.playing()) {
+          const { isPlaying: currentIsPlaying, howl } = usePlayerStore.getState()
+          // Only play if this is the CURRENT sound instance
+          if (howl === sound && currentIsPlaying && !sound.playing()) {
             sound.play()
           }
         })

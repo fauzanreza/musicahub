@@ -377,16 +377,17 @@ export default function JamPage() {
     if (!isHost || !jam) return
     const newState = !isPlayerPlaying
     try {
+      const { currentTime } = usePlayerStore.getState()
       await fetch(`/api/jams/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isPlaying: newState }),
+        body: JSON.stringify({ isPlaying: newState, seekPosition: currentTime }),
       })
       if (newState) play()
       else pause()
       socket?.emit("sync-playback", { 
         jamId: jam.id, 
-        state: { isPlaying: newState } 
+        state: { isPlaying: newState, seekPosition: currentTime } 
       })
       queryClient.invalidateQueries({ queryKey: ["jam", id] })
     } catch (error) {
