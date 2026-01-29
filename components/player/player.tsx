@@ -259,7 +259,8 @@ export function Player() {
       }
 
       // Sync play/pause
-      if (jamIsPlaying && !isPlaying) {
+      const { isPlaying: localIsPlaying } = usePlayerStore.getState()
+      if (jamIsPlaying && !localIsPlaying) {
         play()
         // Force check if blocked
         const { howl } = usePlayerStore.getState()
@@ -267,7 +268,7 @@ export function Player() {
            howl.play()
         }
       }
-      if (!jamIsPlaying && isPlaying) pause()
+      if (!jamIsPlaying && localIsPlaying) pause()
 
       // Sync position
       const { currentTime: localTime } = usePlayerStore.getState()
@@ -282,7 +283,7 @@ export function Player() {
       socket.off("new-message", handleNewMessage)
       socket.off("playback-state", handlePlaybackState)
     }
-  }, [socket, activeJamId, session?.user?.id, isJamHost, isPlaying, currentTrack?.id, play, pause, seek])
+  }, [socket, activeJamId, session?.user?.id, isJamHost, currentTrack?.id, play, pause, seek])
 
   // Helper to broadcast playback state immediately
   // We use getState() to ensure we have the absolute latest values without triggering re-renders
