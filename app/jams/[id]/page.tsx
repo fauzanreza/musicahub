@@ -126,10 +126,48 @@ export default function JamPage() {
 
     socket.on("user-joined", handleUserJoined)
 
+    const handlePlaybackState = (state: any) => {
+      if (!isHost) { // Only listeners sync
+        if (state.currentTrackId) {
+          const trackItem = jam.queue.find((item: any) => item.track.id === state.currentTrackId)
+          if (trackItem?.track && playerTrack?.id !== trackItem.track.id) {
+            setCurrentTrack(trackItem.track)
+          }
+        }
+        
+        if (state.isPlaying !== undefined) {
+          if (state.isPlaying) play()
+          else pause()
+        }
+        
+        if (state.seekPosition !== undefined) {
+          seek(state.seekPosition)
+        }
+      }
+    }
+
+    socket.on("playback-state", handlePlaybackState)
+
     return () => {
       socket.off("user-joined", handleUserJoined)
+      socket.off("playback-state", handlePlaybackState)
     }
-  }, [socket, jam?.id, session?.user?.id, activeJamId, queryClient, id])
+  }, [socket, jam?.id, session?.user?.id, activeJamId, queryClient, id, isHost, jam?.queue, playerTrack?.id, play, pause, seek, setCurrentTrack])
+
+  // Auto-join if public and not a member
+  useEffect(() => {
+    if (jam && session?.user && !jam.members.some((m: any) => m.userId === session?.user?.id)) {
+      if (jam.isPublic) {
+        fetch(`/api/jams/${id}/join`, { method: "POST" })
+          .then(res => {
+            if (res.ok) {
+              queryClient.invalidateQueries({ queryKey: ["jam", id] })
+              socket?.emit("join-jam", jam.id) // Re-emit join to be safe
+            }
+          })
+      }
+    }
+  }, [jam, session, id, queryClient, socket])
 
 
 
@@ -264,6 +302,14 @@ export default function JamPage() {
         })
         setCurrentTrack(nextTrack)
         play()
+        socket?.emit("sync-playback", { 
+          jamId: jam.id, 
+          state: { 
+            currentTrackId: nextTrack.id, 
+            isPlaying: true, 
+            seekPosition: 0 
+          } 
+        })
         queryClient.invalidateQueries({ queryKey: ["jam", id] })
       } catch (error) {
         toast.error("Failed to skip track")
@@ -287,6 +333,14 @@ export default function JamPage() {
         })
         setCurrentTrack(prevTrack)
         play()
+        socket?.emit("sync-playback", { 
+          jamId: jam.id, 
+          state: { 
+            currentTrackId: prevTrack.id, 
+            isPlaying: true, 
+            seekPosition: 0 
+          } 
+        })
         queryClient.invalidateQueries({ queryKey: ["jam", id] })
       } catch (error) {
         toast.error("Failed to skip track")
@@ -328,6 +382,10 @@ export default function JamPage() {
       })
       if (newState) play()
       else pause()
+      socket?.emit("sync-playback", { 
+        jamId: jam.id, 
+        state: { isPlaying: newState } 
+      })
       queryClient.invalidateQueries({ queryKey: ["jam", id] })
     } catch (error) {
       toast.error("Failed to toggle playback")
@@ -404,7 +462,7 @@ export default function JamPage() {
               <div className="flex items-center gap-3 text-xs font-medium">
                 <span className="flex items-center gap-1.5 text-primary-500">
                   <Crown className="h-3.5 w-3.5" />
-                  <span className="truncate max-w-[120px] md:max-w-none">{jam.host.username}</span>
+                  <span className="truncate max-w-[120px] md:max-w-none">{jam.host?.username}</span>
                 </span>
                 <span className="text-muted-foreground">•</span>
                 <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -685,7 +743,7 @@ export default function JamPage() {
               {jamMessages.map((msg, i) => (
                 <div key={i} className="space-y-1 animate-in fade-in slide-in-from-right-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-primary-500">{msg.username}</span>
+                    <span className="text-[11px] font-bold text-primary-500">{msg.username || "Unknown"}</span>
                     <span className="text-[9px] text-muted-foreground">
                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -752,9 +810,9 @@ export default function JamPage() {
               <div key={member.id} className="flex items-center justify-between p-3 rounded-xl bg-muted hover:bg-accent transition-colors">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-primary-500/10 flex items-center justify-center text-sm font-bold text-primary-500">
-                    {member.user.username[0].toUpperCase()}
+                    {member.user?.username?.[0]?.toUpperCase() || "?"}
                   </div>
-                  <span className="text-sm font-medium text-foreground">{member.user.username}</span>
+                  <span className="text-sm font-medium text-foreground">{member.user?.username || "Unknown User"}</span>
                   {member.role === "HOST" && <Crown className="h-4 w-4 text-yellow-500" />}
                 </div>
                 {isHost && member.userId !== session?.user?.id && (
