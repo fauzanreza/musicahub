@@ -259,12 +259,16 @@ export function Player() {
       }
 
       // Sync play/pause
-      const { isPlaying: localIsPlaying } = usePlayerStore.getState()
-      if (jamIsPlaying && !localIsPlaying) {
-        play()
-        // Force check if blocked
-        const { howl } = usePlayerStore.getState()
-        if (howl && howl.state() === 'loaded' && !howl.playing()) {
+      const { isPlaying: localIsPlaying, howl } = usePlayerStore.getState()
+      
+      if (jamIsPlaying) {
+        if (!localIsPlaying) {
+          play()
+        } 
+        // If meant to be playing (jamIsPlaying) but audio is silent (e.g. suppressed autoplay), force it.
+        // We strictly check !howl.playing() to avoid double-playing/overlapping.
+        else if (howl && howl.state() === 'loaded' && !howl.playing()) {
+           console.log("Syncing playback: forcing play for listener")
            howl.play()
         }
       }
@@ -780,10 +784,15 @@ export function Player() {
     })
 
     setHowl(sound)
-    const { isPlaying: currentIsPlaying } = usePlayerStore.getState()
+    const { isPlaying: currentIsPlaying, isHost: isJamHost, activeJamId } = usePlayerStore.getState()
     
+    // Check if user is a listener (in a jam but not the host)
+    const isListener = activeJamId && !isJamHost
+
     // Try to play immediately
-    if (currentIsPlaying && !sound.playing()) {
+    // CRITICAL: Do NOT autoplay if listener. Wait for socket sync to handle it.
+    // This prevents "overlapping" and "double play" issues where local autoplay fights with socket sync.
+    if (currentIsPlaying && !sound.playing() && !isListener) {
       sound.play()
     }
 
