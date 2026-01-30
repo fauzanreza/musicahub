@@ -126,31 +126,14 @@ export default function JamPage() {
 
     socket.on("user-joined", handleUserJoined)
 
-    const handlePlaybackState = (state: any) => {
-      if (!isHost) { // Only listeners sync
-        if (state.currentTrackId) {
-          const trackItem = jam.queue.find((item: any) => item.track.id === state.currentTrackId)
-          if (trackItem?.track && playerTrack?.id !== trackItem.track.id) {
-            setCurrentTrack(trackItem.track)
-          }
-        }
-        
-        if (state.isPlaying !== undefined) {
-          if (state.isPlaying) play()
-          else pause()
-        }
-        
-        if (state.seekPosition !== undefined) {
-          seek(state.seekPosition)
-        }
-      }
-    }
-
-    socket.on("playback-state", handlePlaybackState)
+    // REMOVED: Redundant playback-state listener. 
+    // The global Player component handles sync to ensure audio context is managed correctly.
+    // const handlePlaybackState = (state: any) => { ... }
+    // socket.on("playback-state", handlePlaybackState)
 
     return () => {
       socket.off("user-joined", handleUserJoined)
-      socket.off("playback-state", handlePlaybackState)
+      // socket.off("playback-state", handlePlaybackState)
     }
   }, [socket, jam?.id, session?.user?.id, activeJamId, queryClient, id, isHost, jam?.queue, playerTrack?.id, play, pause, seek, setCurrentTrack])
 

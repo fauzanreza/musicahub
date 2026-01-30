@@ -255,10 +255,13 @@ export function Player() {
 
       // Sync track if different
       if (currentTrack?.id !== track?.id && track) {
-        usePlayerStore.getState().setCurrentTrack(track)
+        // If track changed, just update state and let the useEffect/onload handle the playback
+        // This prevents playing the OLD track instance just before it gets unloaded
+        usePlayerStore.setState({ currentTrack: track, isPlaying: jamIsPlaying })
+        return
       }
 
-      // Sync play/pause
+      // Sync play/pause (Only if track is same)
       const { isPlaying: localIsPlaying, howl } = usePlayerStore.getState()
       
       if (jamIsPlaying) {
@@ -805,13 +808,13 @@ export function Player() {
     const unlockAudio = () => {
       const ctx = (window as any).Howler?.ctx;
       if (ctx && ctx.state === 'suspended') {
-        ctx.resume().then(() => {
-          const { isPlaying: currentIsPlaying, howl } = usePlayerStore.getState()
-          // Only play if this is the CURRENT sound instance
-          if (howl === sound && currentIsPlaying && !sound.playing()) {
-            sound.play()
-          }
-        })
+        ctx.resume()
+      }
+      
+      const { isPlaying: currentIsPlaying, howl } = usePlayerStore.getState()
+      // Only play if this is the CURRENT sound instance
+      if (howl === sound && currentIsPlaying && !sound.playing()) {
+        sound.play()
       }
     }
 
