@@ -37,6 +37,8 @@ import {
   Smile,
   ExternalLink,
   LogOut,
+  ArrowUp,
+  ArrowDown,
   Trash2,
   Settings,
 } from "lucide-react"
@@ -511,12 +513,7 @@ export function Player() {
     }
   }
 
-  const handleShare = () => {
-    if (!currentTrack) return
-    const url = `${window.location.origin}/track/${currentTrack.id}`
-    navigator.clipboard.writeText(url)
-    toast.success("Link copied to clipboard!")
-  }
+
 
   const handleNext = async () => {
     if (activeJamId && isJamHost && jam?.queue) {
@@ -710,6 +707,69 @@ export function Player() {
       toast.error("An error occurred")
     } finally {
       setIsCreatingPlaylist(false)
+    }
+  }
+
+  const handleShare = async () => {
+    try {
+      if (activeJamId) {
+        await navigator.clipboard.writeText(`${window.location.origin}/jams/${activeJamId}`)
+        toast.success("Jam link copied to clipboard!")
+      } else if (currentTrack) {
+        await navigator.clipboard.writeText(`${window.location.origin}/track/${currentTrack.id}`)
+        toast.success("Track link copied to clipboard!")
+      }
+    } catch (err) {
+      toast.error("Failed to copy link")
+    }
+  }
+
+  const handleMoveTrack = async (jamTrackId: string, currentIndex: number, direction: 'up' | 'down') => {
+    if (!jam || !activeJamId || !isJamHost) return
+
+    const newQueue = [...jam.queue]
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+
+    if (targetIndex < 0 || targetIndex >= newQueue.length) return
+
+    // Optimistic swap logic could go here if we managed state locally, 
+    // but relying on refetch is safer for consistency with backend
+    
+    // Construct ordered IDs payload based on the swap
+    const itemToMove = newQueue[currentIndex]
+    newQueue.splice(currentIndex, 1)
+    newQueue.splice(targetIndex, 0, itemToMove)
+
+    const orderedIds = newQueue.map((item: any) => item.id)
+
+    try {
+      await fetch(`/api/jams/${activeJamId}/queue`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderedIds })
+      })
+      queryClient.invalidateQueries({ queryKey: ["jam", activeJamId] })
+    } catch (error) {
+      toast.error("Failed to reorder queue")
+    }
+  }
+
+  const handleRemoveTrack = async (e: React.MouseEvent, jamTrackId: string) => {
+    e.stopPropagation() // Prevent playing track when clicking remove
+    if (!activeJamId || !isJamHost) return
+
+    try {
+      const res = await fetch(`/api/jams/${activeJamId}/queue/${jamTrackId}`, {
+        method: "DELETE"
+      })
+      if (res.ok) {
+        toast.success("Track removed from queue")
+        queryClient.invalidateQueries({ queryKey: ["jam", activeJamId] })
+      } else {
+        throw new Error()
+      }
+    } catch (error) {
+      toast.error("Failed to remove track")
     }
   }
 
@@ -971,8 +1031,8 @@ export function Player() {
                 </div>
               ) : (
                 <>
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Now Playing</p>
-                  <p className="text-xs md:text-sm font-semibold truncate max-w-[150px] md:max-w-none">{currentTrack.genre}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground text-center">Now Playing</p>
+                  <p className="text-xs md:text-sm font-semibold truncate max-w-[150px] md:max-w-none text-center">{currentTrack.genre}</p>
                 </>
               )}
             </div>
@@ -1125,7 +1185,7 @@ export function Player() {
                     <div className="flex flex-col h-full">
                       {/* Up Next Mode Selector */}
                       {!activeJamId && (
-                        <div className="flex items-center gap-2 p-3 px-5 border-b border-white/5 flex-shrink-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+                        <div className="flex items-center justify-center gap-2 p-3 px-5 border-b border-white/5 flex-shrink-0 overflow-x-auto [&::-webkit-scrollbar]:hidden">
                           {(['mix', 'similar', 'popular'] as const).map((mode) => (
                             <button
                               key={mode}
@@ -1144,11 +1204,11 @@ export function Player() {
 
                       <div className="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-3">
                       {activeJamId && jam ? (
-                        jam.queue.map((item: any) => (
+                        jam.queue.map((item: any, index: number) => (
                           <div 
                             key={item.id} 
                             onClick={() => handleJamQueueClick(item.track)}
-                            className={`flex items-center gap-4 p-2.5 rounded-xl transition-all cursor-pointer ${item.track.id === currentTrack?.id ? "bg-primary-500/10 border border-primary-500/20" : "hover:bg-accent"}`}
+                            className={`flex items-center gap-4 p-2.5 rounded-xl transition-all cursor-pointer group/item ${item.track.id === currentTrack?.id ? "bg-primary-500/10 border border-primary-500/20" : "hover:bg-accent"}`}
                           >
                             <div className="relative h-12 w-12 flex-shrink-0">
                               <Image src={item.track.coverUrl ? `/api/stream/image/${item.track.coverUrl}` : "/default-cover.jpg"} alt={item.track.title} fill className="object-cover rounded-lg" />
@@ -1166,6 +1226,34 @@ export function Player() {
                               <p className={`font-bold truncate text-xs ${item.track.id === currentTrack?.id ? "text-primary-500" : "text-foreground"}`}>{item.track.title}</p>
                               <p className="text-[10px] text-muted-foreground truncate">{item.track.genre}</p>
                             </div>
+                            
+                            {/* Host Controls */}
+                            {isJamHost && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                                <div className="flex flex-col mr-1">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleMoveTrack(item.id, index, 'up') }}
+                                    disabled={index === 0}
+                                    className="p-1 hover:text-primary-500 text-muted-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                                  >
+                                    <ArrowUp className="h-3 w-3" />
+                                  </button>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleMoveTrack(item.id, index, 'down') }}
+                                    disabled={index === jam.queue.length - 1}
+                                    className="p-1 hover:text-primary-500 text-muted-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                                  >
+                                    <ArrowDown className="h-3 w-3" />
+                                  </button>
+                                </div>
+                                <button 
+                                  onClick={(e) => handleRemoveTrack(e, item.id)}
+                                  className="p-2 hover:bg-red-500/10 hover:text-red-500 text-muted-foreground rounded-lg transition-colors"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))
                       ) : (

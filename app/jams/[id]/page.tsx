@@ -103,19 +103,25 @@ export default function JamPage() {
 
   const isHost = jam?.hostId === session?.user?.id
 
-  // Socket setup
-  useEffect(() => {
-    if (!socket || !jam) return
+  // Track if we've shown the welcome toast for this jam
+  const hasShownWelcomeRef = useRef<string | null>(null)
 
-    socket.emit("join-jam", jam.id)
-    
-    // Only show welcome toast if we are joining a NEW jam
-    if (activeJamId !== jam.id) {
+  // Show welcome toast only once when joining a new jam
+  useEffect(() => {
+    if (jam && activeJamId !== jam.id && hasShownWelcomeRef.current !== jam.id) {
+      hasShownWelcomeRef.current = jam.id
       toast.success(`Welcome to ${jam.name}!`, {
         description: "You're now listening live with the group.",
         icon: <Users className="h-4 w-4" />
       })
     }
+  }, [jam?.id, activeJamId, jam?.name])
+
+  // Socket setup
+  useEffect(() => {
+    if (!socket || !jam) return
+
+    socket.emit("join-jam", jam.id)
 
     const handleUserJoined = () => {
       queryClient.invalidateQueries({ queryKey: ["jam", id] })
@@ -135,7 +141,7 @@ export default function JamPage() {
       socket.off("user-joined", handleUserJoined)
       // socket.off("playback-state", handlePlaybackState)
     }
-  }, [socket, jam?.id, session?.user?.id, activeJamId, queryClient, id, isHost, jam?.queue, playerTrack?.id, play, pause, seek, setCurrentTrack])
+  }, [socket, jam?.id, id, queryClient])
 
   // Auto-join if public and not a member
   useEffect(() => {
@@ -171,7 +177,10 @@ export default function JamPage() {
       
       // Sync queue
       if (jam.queue) {
-        setPlayerQueue(jam.queue.map((item: any) => item.track))
+        setPlayerQueue(jam.queue.map((item: any) => ({
+          ...item.track,
+          jamTrackId: item.id // Store the JamTrack ID for management (reorder/delete)
+        })))
       }
     }
   }, [jam, session, isHost, setActiveJam])

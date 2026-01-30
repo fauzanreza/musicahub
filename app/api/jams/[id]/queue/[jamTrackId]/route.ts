@@ -10,7 +10,6 @@ export async function DELETE(
     const { id: jamId, jamTrackId } = await params;
     const session = await auth();
     const userId = session?.user?.id;
-
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
@@ -23,104 +22,51 @@ export async function DELETE(
       return new NextResponse("Jam not found", { status: 404 });
     }
 
+    // Only host can remove from queue
     if (jam.hostId !== userId) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 
-    await prisma.jamTrack.delete({
+    // If jamTrackId is actually a trackId, we might need to find the specific JamTrack entry
+    // But ideally it should be the JamTrack ID. 
+    // Let's first try to delete as if it is a JamTrack ID (which is a CUID)
+    
+    // Check if it exists
+    const jamTrack = await prisma.jamTrack.findUnique({
       where: { id: jamTrackId },
     });
 
-    // Re-index positions
-    const remainingTracks = await prisma.jamTrack.findMany({
-      where: { jamId },
-      orderBy: { position: "asc" },
+    if (jamTrack) {
+        if (jamTrack.jamId !== jamId) {
+             return new NextResponse("Track not in this jam", { status: 400 });
+        }
+        await prisma.jamTrack.delete({
+            where: { id: jamTrackId },
+        });
+        return new NextResponse("Track removed", { status: 200 });
+    } 
+    
+    // If not found by Primary ID, maybe the user sent a Track ID?
+    // In that case, we delete the *first* playing instance of that track in this jam?
+    // Or we strictly enforce JamTrack ID. Strict is better for API design.
+    // However, if the frontend currently only knows Track IDs, we need a fallback.
+    
+    const jamTrackByTrackId = await prisma.jamTrack.findFirst({
+        where: { jamId, trackId: jamTrackId },
+        orderBy: { position: 'asc' } // Remove the first occurrence
     });
 
-    await Promise.all(
-      remainingTracks.map((track, index) =>
-        prisma.jamTrack.update({
-          where: { id: track.id },
-          data: { position: index },
-        })
-      )
-    );
-
-    return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    console.error("[JAM_TRACK_DELETE]", error);
-    return new NextResponse("Internal Error", { status: 500 });
-  }
-}
-
-export async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string; jamTrackId: string }> }
-) {
-  try {
-    const { id: jamId, jamTrackId } = await params;
-    const session = await auth();
-    const userId = session?.user?.id;
-
-    if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 });
+    if (jamTrackByTrackId) {
+        await prisma.jamTrack.delete({
+            where: { id: jamTrackByTrackId.id }
+        });
+        return new NextResponse("Track removed (by TrackID)", { status: 200 });
     }
 
-    const jam = await prisma.jam.findUnique({
-      where: { id: jamId },
-    });
+    return new NextResponse("Track not found in queue", { status: 404 });
 
-    if (!jam) {
-      return new NextResponse("Jam not found", { status: 404 });
-    }
-
-    if (jam.hostId !== userId) {
-      return new NextResponse("Forbidden", { status: 403 });
-    }
-
-    const body = await req.json();
-    const { direction } = body; // "up" or "down"
-
-    const currentTrack = await prisma.jamTrack.findUnique({
-      where: { id: jamTrackId },
-    });
-
-    if (!currentTrack) {
-      return new NextResponse("Track not found in queue", { status: 404 });
-    }
-
-    const targetPosition = direction === "up" ? currentTrack.position - 1 : currentTrack.position + 1;
-
-    if (targetPosition < 0) {
-      return new NextResponse("Already at the top", { status: 400 });
-    }
-
-    const otherTrack = await prisma.jamTrack.findFirst({
-      where: {
-        jamId,
-        position: targetPosition,
-      },
-    });
-
-    if (!otherTrack) {
-      return new NextResponse("Already at the bottom", { status: 400 });
-    }
-
-    // Swap positions
-    await prisma.$transaction([
-      prisma.jamTrack.update({
-        where: { id: currentTrack.id },
-        data: { position: targetPosition },
-      }),
-      prisma.jamTrack.update({
-        where: { id: otherTrack.id },
-        data: { position: currentTrack.position },
-      }),
-    ]);
-
-    return new NextResponse("OK", { status: 200 });
-  } catch (error) {
-    console.error("[JAM_TRACK_PATCH]", error);
-    return new NextResponse("Internal Error", { status: 500 });
+  } catch (error: any) {
+    console.error("[JAM_QUEUE_DELETE]", error);
+    return new NextResponse(error.message || "Internal Error", { status: 500 });
   }
 }

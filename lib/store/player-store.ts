@@ -18,6 +18,7 @@ export interface Track {
     downs: number
   }
   isLiked?: boolean
+  jamTrackId?: string // Specifically for Jam queues to identify unique instances
 }
 
 interface PlayerState {
