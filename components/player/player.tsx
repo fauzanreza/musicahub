@@ -268,7 +268,6 @@ export function Player() {
         // If meant to be playing (jamIsPlaying) but audio is silent (e.g. suppressed autoplay), force it.
         // We strictly check !howl.playing() to avoid double-playing/overlapping.
         else if (howl && howl.state() === 'loaded' && !howl.playing()) {
-           console.log("Syncing playback: forcing play for listener")
            howl.play()
         }
       }
@@ -747,6 +746,12 @@ export function Player() {
       onload: () => {
         setDuration(sound.duration())
         setIsLoading(false)
+        
+        // Check if we should auto-play based on store state (e.g. for listeners sync)
+        const { isPlaying: currentIsPlaying, isHost: isJamHost, activeJamId } = usePlayerStore.getState()
+        if (activeJamId && !isJamHost && currentIsPlaying && !sound.playing()) {
+          sound.play()
+        }
       },
       onloaderror: (id, err) => {
         console.error("Load error:", err)
